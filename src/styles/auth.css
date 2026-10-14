@@ -1,0 +1,578 @@
+@import './welcome.css';
+
+/* ==========================================================
+   SECURE VAULT - AUTH & LANDING PAGE STYLES
+   Welcome hero, features, login & register forms
+   ========================================================== */
+
+/* --- MAIN PAGE CONTAINER --- */
+.sv-page-wrapper {
+  position: relative;
+  z-index: 1;
+  min-height: calc(100vh - 180px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- HERO SECTION --- */
+.sv-hero-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 4.5rem 1.5rem 4rem;
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  align-items: center;
+  gap: 3.5rem;
+  min-height: 580px;
+}
+
+.sv-hero-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.sv-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-crimson);
+  background: var(--accent-crimson-subtle);
+  border: 1px solid rgba(229, 9, 42, 0.3);
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-full);
+  margin-bottom: 1.5rem;
+}
+
+.sv-hero-headline {
+  font-size: 3.25rem;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  margin-bottom: 1.25rem;
+}
+
+.sv-hero-headline .highlight {
+  color: var(--accent-crimson);
+  position: relative;
+  display: inline-block;
+}
+
+.sv-hero-description {
+  font-size: 1.15rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  max-width: 520px;
+  margin-bottom: 2.25rem;
+}
+
+.sv-hero-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 2.25rem;
+}
+
+.sv-hero-trust {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.sv-hero-trust svg {
+  color: var(--accent-crimson);
+}
+
+/* --- HERO VISUAL ILLUSTRATION --- */
+.sv-hero-visual {
+  position: relative;
+  width: 100%;
+  height: 440px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.sv-visual-glow-backdrop {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(229, 9, 42, 0.28) 0%, rgba(229, 9, 42, 0.05) 50%, transparent 70%);
+  filter: blur(40px);
+  animation: pulseGlow 5s ease-in-out infinite alternate;
+}
+
+@keyframes pulseGlow {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  100% { transform: scale(1.1); opacity: 1; }
+}
+
+.sv-visual-shield-center {
+  position: relative;
+  z-index: 3;
+  width: 120px;
+  height: 140px;
+  background: linear-gradient(145deg, rgba(30, 30, 35, 0.9) 0%, rgba(15, 15, 18, 0.95) 100%);
+  border: 1px solid rgba(229, 9, 42, 0.5);
+  border-radius: 20px 20px 60px 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: #FFFFFF;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 30px rgba(229, 9, 42, 0.3);
+}
+
+.sv-visual-shield-icon {
+  color: var(--accent-crimson);
+  filter: drop-shadow(0 0 10px rgba(229, 9, 42, 0.6));
+}
+
+.sv-visual-shield-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #FFFFFF;
+  text-transform: uppercase;
+}
+
+/* Floating Document Badges */
+.sv-floating-doc {
+  position: absolute;
+  z-index: 4;
+  padding: 0.85rem 1.15rem;
+  background: rgba(24, 24, 27, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  animation: floatSlow 6s ease-in-out infinite alternate;
+}
+
+@keyframes floatSlow {
+  0% { transform: translateY(0px); }
+  100% { transform: translateY(-12px); }
+}
+
+.sv-floating-doc.doc-pdf {
+  top: 45px;
+  left: 20px;
+  border-left: 3px solid #EF4444;
+  animation-delay: 0s;
+}
+
+.sv-floating-doc.doc-ppt {
+  bottom: 55px;
+  right: 25px;
+  border-left: 3px solid #F97316;
+  animation-delay: -2.5s;
+}
+
+.sv-floating-doc.doc-code {
+  bottom: 70px;
+  left: 30px;
+  border-left: 3px solid var(--accent-crimson);
+  animation-delay: -4s;
+}
+
+.sv-doc-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sv-doc-info-name {
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+
+.sv-doc-info-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.sv-visual-code-pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(229, 9, 42, 0.15);
+  color: #FF8596;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid rgba(229, 9, 42, 0.3);
+}
+
+/* Connecting lines */
+.sv-visual-grid-rings {
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+/* --- FEATURES SECTION --- */
+.sv-features-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+}
+
+.sv-features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.75rem;
+}
+
+.sv-feature-card {
+  padding: 2rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sv-feature-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--accent-crimson-subtle);
+  border: 1px solid rgba(229, 9, 42, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-crimson);
+  margin-bottom: 0.5rem;
+}
+
+.sv-feature-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sv-feature-desc {
+  font-size: 0.925rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* --- AUTH PAGES (LOGIN & REGISTER) --- */
+.sv-auth-container {
+  max-width: 480px;
+  width: 100%;
+  margin: 3.5rem auto 4.5rem;
+  padding: 0 1.25rem;
+}
+
+.sv-auth-card {
+  padding: 2.5rem 2.25rem;
+}
+
+.sv-auth-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sv-auth-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(229, 9, 42, 0.2) 0%, rgba(17, 17, 17, 0.95) 100%);
+  border: 1px solid rgba(229, 9, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-crimson);
+  margin-bottom: 1.25rem;
+  box-shadow: 0 0 18px rgba(229, 9, 42, 0.3);
+}
+
+.sv-auth-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.sv-auth-subtitle {
+  font-size: 0.925rem;
+  color: var(--text-secondary);
+  max-width: 340px;
+}
+
+/* --- FORM FIELDS --- */
+.sv-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sv-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.sv-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sv-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sv-input-icon {
+  position: absolute;
+  left: 1rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.sv-input {
+  width: 100%;
+  padding: 0.8rem 1rem 0.8rem 2.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: #FFFFFF;
+  font-size: 0.95rem;
+  transition: all var(--transition-fast);
+}
+
+.sv-input::placeholder {
+  color: #52525B;
+}
+
+.sv-input:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sv-input:focus {
+  outline: none;
+  border-color: var(--accent-crimson);
+  box-shadow: 0 0 0 3px var(--accent-crimson-subtle);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sv-input[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+
+.sv-input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px var(--color-error-bg);
+}
+
+.sv-field-error {
+  font-size: 0.775rem;
+  color: #F87171;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.2rem;
+}
+
+/* Password Input Toggle */
+.sv-password-toggle-btn {
+  position: absolute;
+  right: 0.85rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 0.35rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast);
+}
+
+.sv-password-toggle-btn:hover {
+  color: #FFFFFF;
+}
+
+/* Password Strength Indicator */
+.sv-strength-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.sv-strength-bars {
+  display: flex;
+  gap: 0.35rem;
+  height: 4px;
+}
+
+.sv-strength-bar {
+  flex: 1;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background-color var(--transition-fast);
+}
+
+.sv-strength-bar.active-weak {
+  background: #EF4444;
+}
+
+.sv-strength-bar.active-fair {
+  background: #F59E0B;
+}
+
+.sv-strength-bar.active-strong {
+  background: #22C55E;
+}
+
+.sv-strength-label {
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Checkbox and Additional Controls */
+.sv-form-row-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.sv-form-row-checkbox input[type="checkbox"] {
+  accent-color: var(--accent-crimson);
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+.sv-form-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.sv-link-accent {
+  color: var(--accent-crimson);
+  font-weight: 500;
+  transition: color var(--transition-fast);
+}
+
+.sv-link-accent:hover {
+  color: var(--accent-crimson-hover);
+  text-decoration: underline;
+}
+
+.sv-auth-footer-link {
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-top: 1.5rem;
+}
+
+/* Spinner */
+.sv-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1024px) {
+  .sv-hero-section {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    padding-top: 3.5rem;
+  }
+  .sv-hero-headline {
+    font-size: 2.75rem;
+  }
+  .sv-hero-visual {
+    height: 380px;
+  }
+  .sv-features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .sv-hero-headline {
+    font-size: 2.25rem;
+  }
+  .sv-hero-description {
+    font-size: 1rem;
+  }
+  .sv-features-grid {
+    grid-template-columns: 1fr;
+  }
+  .sv-auth-card {
+    padding: 2rem 1.5rem;
+  }
+  .sv-hero-actions {
+    width: 100%;
+  }
+  .sv-hero-actions a, .sv-hero-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .sv-floating-doc.doc-pdf {
+    left: 5px;
+    top: 25px;
+  }
+  .sv-floating-doc.doc-ppt {
+    right: 5px;
+    bottom: 25px;
+  }
+  .sv-floating-doc.doc-code {
+    display: none;
+  }
+  .sv-hero-visual {
+    height: 320px;
+  }
+}

@@ -1,0 +1,13 @@
+/* Secure Vault - Auth Pages Fallback & Utility Styling */
+.auth-page {
+  min-height: calc(100vh - 140px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+}

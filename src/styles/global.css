@@ -1,0 +1,176 @@
+/* ==========================================================
+   SECURE VAULT - GLOBAL DESIGN SYSTEM & TOKENS
+   Color Theme: Premium Obsidian Black & Crimson Red
+   ========================================================== */
+
+:root {
+  /* Color Palette */
+  --bg-primary: #080808;
+  --bg-secondary: #111111;
+  --bg-tertiary: #18181B;
+  
+  /* Glass Surfaces */
+  --glass-surface: rgba(17, 17, 17, 0.72);
+  --glass-surface-hover: rgba(24, 24, 27, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-focus: rgba(229, 9, 42, 0.5);
+  --glass-blur: 16px;
+
+  /* Accents & Brand */
+  --accent-crimson: #E5092A;
+  --accent-crimson-hover: #FF2948;
+  --accent-crimson-active: #C10722;
+  --accent-crimson-glow: rgba(229, 9, 42, 0.28);
+  --accent-crimson-subtle: rgba(229, 9, 42, 0.12);
+
+  /* Typography Colors */
+  --text-primary: #FFFFFF;
+  --text-secondary: #A1A1AA;
+  --text-muted: #71717A;
+  --text-inverse: #080808;
+
+  /* Feedback Colors */
+  --color-success: #22C55E;
+  --color-success-bg: rgba(34, 197, 94, 0.12);
+  --color-success-border: rgba(34, 197, 94, 0.3);
+  
+  --color-error: #EF4444;
+  --color-error-bg: rgba(239, 68, 68, 0.12);
+  --color-error-border: rgba(239, 68, 68, 0.35);
+
+  --color-warning: #F59E0B;
+  --color-warning-bg: rgba(245, 158, 11, 0.12);
+  --color-warning-border: rgba(245, 158, 11, 0.3);
+
+  /* Layout & Geometry */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 400ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px -4px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 16px 40px -8px rgba(0, 0, 0, 0.7);
+  --shadow-crimson: 0 0 35px -5px rgba(229, 9, 42, 0.35);
+  --shadow-crimson-subtle: 0 0 20px -2px rgba(229, 9, 42, 0.2);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Background Atmosphere */
+.app-atmosphere {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.ambient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.18;
+  pointer-events: none;
+  transition: opacity var(--transition-smooth);
+}
+
+.ambient-orb-top {
+  top: -150px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 450px;
+  background: radial-gradient(circle, var(--accent-crimson) 0%, transparent 70%);
+}
+
+.ambient-orb-right {
+  top: 30%;
+  right: -100px;
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, #990018 0%, transparent 70%);
+  opacity: 0.12;
+}
+
+.ambient-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at 50% 30%, black 40%, transparent 80%);
+  -webkit-mask-image: radial-gradient(circle at 50% 30%, black 40%, transparent 80%);
+}
+
+/* Base Accessibility & Focus */
+:focus-visible {
+  outline: 2px solid var(--accent-crimson);
+  outline-offset: 2px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+/* Typography Helpers */
+.text-crimson {
+  color: var(--accent-crimson);
+}
+
+.gradient-text-crimson {
+  background: linear-gradient(135deg, #FFFFFF 30%, #FF6B81 70%, var(--accent-crimson) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Reduced Motion Preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
