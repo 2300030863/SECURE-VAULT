@@ -1498,6 +1498,13 @@ export default function VaultDashboard({ currentUser }) {
                             : 'Permanent access'}
                         </span>
                         <span>•</span>
+                        <span className="flex items-center gap-1 text-cyan-400 font-medium" title="Views">
+                          <Eye className="w-3 h-3" />
+                          <span>
+                            {unlockedDoc.view_count || 1} {unlockedDoc.view_count === 1 ? 'view' : 'views'}
+                          </span>
+                        </span>
+                        <span>•</span>
                         <span className="flex items-center gap-1 text-emerald-400 font-medium" title="Downloads / Limit">
                           <Download className="w-3 h-3" />
                           <span>
@@ -1505,7 +1512,7 @@ export default function VaultDashboard({ currentUser }) {
                           </span>
                         </span>
                       </div>
-                      {unlockedDoc.delete_after_download && (
+                      {Boolean(unlockedDoc.delete_after_download) && (
                         <div className="mt-1.5 flex items-center gap-1 text-[10px] text-red-400 font-semibold bg-red-950/40 px-2 py-0.5 rounded border border-red-900/40">
                           <Flame className="w-3 h-3 text-[#E11D2E]" />
                           <span>Burn on Read: This document will be deleted immediately after you download it.</span>
@@ -1588,14 +1595,14 @@ export default function VaultDashboard({ currentUser }) {
                     </button>
 
                     {showInlinePreview && (
-                      <div className="mt-2.5 p-2 bg-[#0B0B0D] border border-[#27272A] rounded-xl overflow-hidden animate-in fade-in duration-200">
+                      <div className="mt-2.5 p-1.5 bg-[#0B0B0D] border border-[#27272A] rounded-xl overflow-hidden animate-in fade-in duration-200">
                         <iframe
                           src={apiUrl(
                             unlockedDoc.view_url ||
                             `/api/documents/view/${encodeURIComponent(unlockedDoc.enteredCode || accessCodeInput.trim())}`
                           )}
                           title="Document Preview"
-                          className="w-full h-80 rounded-lg border border-zinc-800 bg-[#121215]"
+                          className="w-full h-96 rounded-lg border border-zinc-800 bg-[#121215]"
                         />
                       </div>
                     )}

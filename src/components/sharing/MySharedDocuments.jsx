@@ -147,6 +147,14 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
     return { text: `${days}d left`, isExpired: false };
   };
 
+  const totalViews = useMemo(() => {
+    return documents.reduce((acc, d) => acc + (d.view_count || 0), 0);
+  }, [documents]);
+
+  const totalDownloads = useMemo(() => {
+    return documents.reduce((acc, d) => acc + (d.download_count || 0), 0);
+  }, [documents]);
+
   if (!currentUser) {
     return (
       <div className="bg-[#18181B]/70 border border-[#27272A] rounded-2xl p-6 sm:p-8 text-center max-w-2xl mx-auto shadow-xl">
@@ -172,26 +180,39 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
   return (
     <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-6 sm:p-7 shadow-xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-lg font-bold text-white">Your Shared Online Vaults</h3>
             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-red-950/60 text-[#E11D2E] border border-[#E11D2E]/30">
               {documents.length} {documents.length === 1 ? 'vault' : 'vaults'}
             </span>
+            {documents.length > 0 && (
+              <>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-800/40 flex items-center gap-1 shadow-sm">
+                  <Eye className="w-2.5 h-2.5 text-cyan-400" />
+                  {totalViews} {totalViews === 1 ? 'view' : 'views'}
+                </span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800/40 flex items-center gap-1 shadow-sm">
+                  <Download className="w-2.5 h-2.5 text-emerald-400" />
+                  {totalDownloads} {totalDownloads === 1 ? 'download' : 'downloads'}
+                </span>
+              </>
+            )}
           </div>
-          <p className="text-xs text-zinc-400 mt-0.5">
-            Monitored archives in private Backblaze B2 with real-time download and expiry enforcement.
+          <p className="text-xs text-zinc-400 mt-1">
+            Monitored archives in private Backblaze B2 with real-time views, downloads, and expiry enforcement.
           </p>
         </div>
 
         <button
           type="button"
           onClick={fetchDocuments}
-          className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-[#27272A] transition-all cursor-pointer"
-          title="Refresh vault list"
+          className="self-start sm:self-center px-2.5 py-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-[#27272A] transition-all cursor-pointer flex items-center gap-1.5 text-xs font-medium border border-zinc-800 hover:border-zinc-700"
+          title="Refresh vault list and sync view & download counts"
         >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#E11D2E]' : ''}`} />
+          <span className="hidden sm:inline">Refresh Stats</span>
         </button>
       </div>
 
@@ -291,21 +312,44 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                     </div>
                   </div>
 
-                  {/* Limits and Expiry Progress */}
-                  <div className="space-y-2 p-2.5 rounded-lg bg-[#0E0E12] border border-[#27272A] mb-3 text-xs">
-                    {/* Downloads Limit Bar */}
-                    <div>
-                      <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1">
-                        <span className="flex items-center gap-1">
-                          <Download className="w-3 h-3 text-[#E11D2E]" /> Downloads:
+                  {/* Limits, Engagement, and Expiry Progress */}
+                  <div className="space-y-2.5 p-2.5 rounded-lg bg-[#0E0E12] border border-[#27272A] mb-3 text-xs">
+                    {/* Engagement Metrics: Views & Downloads Grid */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Views / Seen Counter */}
+                      <div className="p-2 rounded-lg bg-[#18181B] border border-zinc-800/80 flex items-center justify-between shadow-xs">
+                        <span className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                          <Eye className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          <span>Views:</span>
                         </span>
-                        <span className="font-mono text-white font-medium">
-                          {doc.download_count || 0} /{' '}
-                          {doc.max_downloads != null ? doc.max_downloads : '∞'}
+                        <span className="font-mono text-cyan-300 font-bold text-xs bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40">
+                          {doc.view_count || 0}
                         </span>
                       </div>
-                      {doc.max_downloads != null && (
-                        <div className="w-full h-1 bg-[#18181B] rounded-full overflow-hidden">
+
+                      {/* Downloads Counter */}
+                      <div className="p-2 rounded-lg bg-[#18181B] border border-zinc-800/80 flex items-center justify-between shadow-xs">
+                        <span className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                          <Download className="w-3.5 h-3.5 text-[#E11D2E] shrink-0" />
+                          <span>Downloads:</span>
+                        </span>
+                        <span className="font-mono text-white font-bold text-xs bg-red-950/40 px-1.5 py-0.5 rounded border border-red-900/40">
+                          {doc.download_count || 0}
+                          <span className="text-zinc-500 font-normal">/{doc.max_downloads != null ? doc.max_downloads : '∞'}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Downloads Limit Bar (if bounded) */}
+                    {doc.max_downloads != null && (
+                      <div className="pt-0.5">
+                        <div className="flex items-center justify-between text-[10px] text-zinc-400 mb-1">
+                          <span>Capacity Usage</span>
+                          <span className="font-mono text-zinc-300">
+                            {doc.download_count || 0} / {doc.max_downloads}
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-[#18181B] rounded-full overflow-hidden border border-zinc-800">
                           <div
                             className={`h-full transition-all duration-300 ${
                               isLimitReached
@@ -320,13 +364,14 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                             }}
                           />
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
-                    {/* Expiration Countdown & Burn on read note */}
-                    <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-800/60">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-[#E11D2E]" /> Expiry:
+                    {/* Expiration Countdown */}
+                    <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1.5 border-t border-zinc-800/60">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Expiry:</span>
                       </span>
                       <span
                         className={`font-medium ${
@@ -337,9 +382,10 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                       </span>
                     </div>
 
-                    {doc.delete_after_download && (
-                      <div className="flex items-center gap-1 text-[10px] text-red-400/90 font-medium pt-0.5">
-                        <Flame className="w-3 h-3 shrink-0" />
+                    {/* Burn-on-read warning - Boolean check to prevent stray 0 from rendering */}
+                    {Boolean(doc.delete_after_download) && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-red-400/90 font-medium pt-1.5 border-t border-zinc-800/60">
+                        <Flame className="w-3.5 h-3.5 shrink-0 text-red-500 animate-pulse" />
                         <span>Self-destructs after 1st download</span>
                       </div>
                     )}
@@ -395,6 +441,16 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      setDocuments((prev) =>
+                        prev.map((d) =>
+                          d.id === doc.id
+                            ? { ...d, view_count: (d.view_count || 0) + 1 }
+                            : d
+                        )
+                      );
+                      setTimeout(fetchDocuments, 1500);
+                    }}
                     className="flex-1 py-1.5 px-2 rounded-lg bg-[#18181B] hover:bg-[#27272A] border border-[#27272A] hover:border-[#E11D2E]/50 text-zinc-200 text-xs font-semibold flex items-center justify-center gap-1 transition-all text-center cursor-pointer shadow-sm"
                     title="Open in new browser tab"
                   >
@@ -413,7 +469,20 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPreviewDocId(previewDocId === doc.id ? null : doc.id)}
+                    onClick={() => {
+                      const nextState = previewDocId === doc.id ? null : doc.id;
+                      setPreviewDocId(nextState);
+                      if (nextState) {
+                        setDocuments((prev) =>
+                          prev.map((d) =>
+                            d.id === doc.id
+                              ? { ...d, view_count: (d.view_count || 0) + 1 }
+                              : d
+                          )
+                        );
+                        setTimeout(fetchDocuments, 1500);
+                      }
+                    }}
                     className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
                       previewDocId === doc.id
                         ? 'bg-[#E11D2E]/20 border-[#E11D2E] text-white'
@@ -436,7 +505,7 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                           : `/api/documents/owner/${doc.id}/view`)
                       )}
                       title={`Preview ${doc.original_name}`}
-                      className="w-full h-48 rounded-lg border border-zinc-800 bg-[#121215]"
+                      className="w-full h-80 rounded-lg border border-zinc-800 bg-[#121215]"
                     />
                   </div>
                 )}
