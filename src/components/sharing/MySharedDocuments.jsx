@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Lock,
   ExternalLink,
+  X,
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { apiUrl } from '../../config/api';
@@ -226,7 +227,7 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
           {documents.map((doc) => {
             const timeRemaining = getTimeRemaining(doc.expires_at);
             const isLimitReached =
@@ -237,7 +238,7 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
             return (
               <div
                 key={doc.id}
-                className="bg-[#121215] border border-[#27272A] hover:border-[#E11D2E]/40 rounded-xl p-4 flex flex-col justify-between transition-all shadow-md group relative"
+                className="bg-[#121215] border border-[#27272A] hover:border-[#E11D2E]/40 rounded-xl p-4 flex flex-col justify-between transition-all shadow-md group relative self-start"
               >
                 <div>
                   {/* Top Bar: Badges & Delete */}
@@ -430,43 +431,8 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                   </div>
                 )}
 
-                {/* Direct Card Action Buttons: View in Browser & Download */}
-                <div className="pt-2.5 mt-2.5 border-t border-[#27272A]/80 flex items-center gap-1.5">
-                  <a
-                    href={apiUrl(
-                      doc.view_url ||
-                      (doc.access_code
-                        ? `/api/documents/view/${encodeURIComponent(doc.access_code)}`
-                        : `/api/documents/owner/${doc.id}/view`)
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => {
-                      setDocuments((prev) =>
-                        prev.map((d) =>
-                          d.id === doc.id
-                            ? { ...d, view_count: (d.view_count || 0) + 1 }
-                            : d
-                        )
-                      );
-                      setTimeout(fetchDocuments, 1500);
-                    }}
-                    className="flex-1 py-1.5 px-2 rounded-lg bg-[#18181B] hover:bg-[#27272A] border border-[#27272A] hover:border-[#E11D2E]/50 text-zinc-200 text-xs font-semibold flex items-center justify-center gap-1 transition-all text-center cursor-pointer shadow-sm"
-                    title="Open in new browser tab"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5 text-[#E11D2E]" />
-                    <span>View</span>
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadCard(doc)}
-                    disabled={isLimitReached || isDeleteTriggered || timeRemaining.isExpired}
-                    className="flex-1 py-1.5 px-2 rounded-lg bg-[#E11D2E] hover:bg-[#FF2E44] disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-sm shadow-red-950/30"
-                    title="Download document archive"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download</span>
-                  </button>
+                {/* Direct Card Action Buttons: View & Download */}
+                <div className="pt-2.5 mt-2.5 border-t border-[#27272A]/80 flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -483,20 +449,63 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                         setTimeout(fetchDocuments, 1500);
                       }
                     }}
-                    className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                    className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-center cursor-pointer shadow-sm ${
                       previewDocId === doc.id
                         ? 'bg-[#E11D2E]/20 border-[#E11D2E] text-white'
-                        : 'bg-[#18181B] hover:bg-[#27272A] border-[#27272A] text-zinc-400 hover:text-white'
+                        : 'bg-[#18181B] hover:bg-[#27272A] border-[#27272A] hover:border-[#E11D2E]/50 text-zinc-200'
                     }`}
-                    title={previewDocId === doc.id ? 'Close Quick Preview' : 'Toggle Quick Preview'}
+                    title={previewDocId === doc.id ? 'Close Quick Preview' : 'Open Quick Preview'}
                   >
-                    <Eye className="w-3.5 h-3.5 text-zinc-300" />
+                    <Eye className="w-3.5 h-3.5 text-[#E11D2E]" />
+                    <span>{previewDocId === doc.id ? 'Close View' : 'View'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadCard(doc)}
+                    disabled={isLimitReached || isDeleteTriggered || timeRemaining.isExpired}
+                    className="flex-1 py-1.5 px-3 rounded-lg bg-[#E11D2E] hover:bg-[#FF2E44] disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-red-950/30"
+                    title="Download document archive"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download</span>
                   </button>
                 </div>
 
                 {/* Inline Preview Drawer */}
                 {previewDocId === doc.id && (
-                  <div className="mt-2.5 p-1.5 bg-[#0B0B0D] border border-[#27272A] rounded-xl overflow-hidden animate-in fade-in duration-150">
+                  <div className="mt-2.5 p-2 bg-[#0B0B0D] border border-[#27272A] rounded-xl overflow-hidden animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-zinc-800/80 text-[11px] text-zinc-400">
+                      <span className="flex items-center gap-1.5 text-zinc-300 font-medium truncate">
+                        <Eye className="w-3 h-3 text-[#E11D2E]" />
+                        <span>Preview Archive</span>
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <a
+                          href={apiUrl(
+                            doc.view_url ||
+                            (doc.access_code
+                              ? `/api/documents/view/${encodeURIComponent(doc.access_code)}`
+                              : `/api/documents/owner/${doc.id}/view`)
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-zinc-400 hover:text-white hover:underline text-[10px]"
+                          title="Open in new browser tab"
+                        >
+                          <ExternalLink className="w-3 h-3 text-[#E11D2E]" />
+                          <span>New Tab</span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDocId(null)}
+                          className="text-zinc-500 hover:text-zinc-300 p-0.5 rounded cursor-pointer"
+                          title="Close preview"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                     <iframe
                       src={apiUrl(
                         doc.view_url ||
