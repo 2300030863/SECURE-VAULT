@@ -60,8 +60,8 @@ export const getApiBaseUrl = () => {
       const envPointsToLocal =
         cleanEnv.includes('localhost') || cleanEnv.includes('127.0.0.1');
 
-      if (!isLocalHost && envPointsToLocal && window.location.origin) {
-        return `${window.location.origin}/api`;
+      if (!isLocalHost && envPointsToLocal) {
+        return 'https://secure-vault-backend-1.onrender.com/api';
       }
     }
 
@@ -87,13 +87,11 @@ export const getApiBaseUrl = () => {
       return `http://${hostname}:5000/api`;
     }
 
-    // Remote server deployment fallback (Render, Railway, VPS, EC2, Nginx)
-    if (window.location.origin) {
-      return `${window.location.origin}/api`;
-    }
+    // Production remote fallback (Vercel connecting to Render)
+    return 'https://secure-vault-backend-1.onrender.com/api';
   }
 
-  return 'http://localhost:5000/api';
+  return 'https://secure-vault-backend-1.onrender.com/api';
 };
 
 export const API_BASE_URL = getApiBaseUrl();

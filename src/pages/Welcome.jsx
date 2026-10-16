@@ -40,14 +40,14 @@ export default function Welcome() {
           </p>
 
           <div className="sv-hero-actions">
-            <Link to="/register" className="sv-btn-primary" style={{ width: 'auto' }}>
+            <Link to="/register" className="sv-btn-primary">
               <span>Get Started</span>
               <ArrowRight size={16} />
             </Link>
-            <Link to="/login" className="sv-btn-secondary" style={{ width: 'auto' }}>
+            <Link to="/login" className="sv-btn-secondary">
               Sign In
             </Link>
-            <Link to="/vault" className="sv-btn-secondary" style={{ width: 'auto', borderColor: 'rgba(229, 9, 42, 0.4)' }}>
+            <Link to="/vault" className="sv-btn-secondary sv-btn-vault-link">
               <span>Open Document Vault</span>
             </Link>
           </div>
