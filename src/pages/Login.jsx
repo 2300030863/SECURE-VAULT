@@ -128,7 +128,7 @@ export default function Login({ onLoginSuccess }) {
             </div>
             <h1 className="sv-auth-title">Welcome back</h1>
             <p className="sv-auth-subtitle">
-              Sign in to manage and share your Secure Vault documents.
+              Sign in to manage and share your DocQevrilo documents.
             </p>
           </div>
 

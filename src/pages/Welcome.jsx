@@ -25,18 +25,26 @@ export default function Welcome() {
         <div className="sv-hero-content">
           <div className="sv-eyebrow">
             <span className="sv-live-dot" />
-            <span>Private Document Sharing</span>
+            <span>DocQevrilo Platform · One Code. Simple Sharing.</span>
           </div>
 
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('open_brand_meaning'))}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-950/60 border border-[#E11D2E]/40 text-xs font-semibold text-white hover:bg-red-900/60 transition-all cursor-pointer mb-2 self-start shadow-sm"
+          >
+            <span>✨ Discover DocQevrilo Brand Meaning</span>
+            <ArrowRight size={12} className="text-[#E11D2E]" />
+          </button>
+
           <h1 id="hero-heading" className="sv-hero-headline">
-            Your documents. <br />
-            <span className="sv-heading-muted">Your control.</span> <br />
-            <span className="highlight">Your vault.</span>
+            Documents. <br />
+            <span className="sv-heading-muted">Security.</span> <br />
+            <span className="highlight">Simplicity.</span>
           </h1>
 
           <p className="sv-hero-description">
-            Store, organize, and share your important documents with high-entropy cryptographic access codes.
-            Direct inline viewing and instant downloads without public URLs or tracking.
+            DocQevrilo gives teachers, students, and teams a smarter way to share documents securely using unique access codes, without needing WhatsApp or Telegram groups.
           </p>
 
           <div className="sv-hero-actions">
@@ -98,8 +106,10 @@ export default function Welcome() {
                   <Shield size={18} />
                 </div>
                 <div>
-                  <strong>SECURE VAULT</strong>
-                  <span>CLOUD PROTOCOL</span>
+                  <strong className="cursor-pointer" onClick={() => window.dispatchEvent(new CustomEvent('open_brand_meaning'))}>
+                    Doc<span style={{ color: '#E11D2E' }}>Qevrilo</span>
+                  </strong>
+                  <span>ONE CODE. SIMPLE SHARING.</span>
                 </div>
               </div>
               <div className="sv-vault-menu">
@@ -297,7 +307,7 @@ export default function Welcome() {
             and cryptographic hash validation, while Backblaze B2 ensures encrypted, private object storage and high-speed streaming.
           </p>
           <Link to="/vault" className="sv-inline-link">
-            <span>Launch Secure Vault Console</span>
+            <span>Launch DocQevrilo Console</span>
             <ArrowRight size={15} />
           </Link>
         </div>

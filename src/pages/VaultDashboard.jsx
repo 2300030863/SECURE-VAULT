@@ -36,10 +36,12 @@ import {
   Plus,
   Globe,
   Flame,
-  HardDrive
+  HardDrive,
+  Tag,
 } from 'lucide-react';
 import StorageModeSelector from '../components/sharing/StorageModeSelector';
 import OnlineSharingSettings from '../components/sharing/OnlineSharingSettings';
+import TemporaryStorageSettings from '../components/sharing/TemporaryStorageSettings';
 import MySharedDocuments from '../components/sharing/MySharedDocuments';
 
 export default function VaultDashboard({ currentUser }) {
@@ -66,6 +68,7 @@ export default function VaultDashboard({ currentUser }) {
   const [maxDownloads, setMaxDownloads] = useState(5); // 1 | 5 | 10 | 'unlimited'
   const [deleteAfterDownload, setDeleteAfterDownload] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [documentName, setDocumentName] = useState('');
   const [textContent, setTextContent] = useState('');
   const [textTitle, setTextTitle] = useState('');
   const [expiryOption, setExpiryOption] = useState('24h');
@@ -380,6 +383,7 @@ export default function VaultDashboard({ currentUser }) {
 
   const handleClearFiles = () => {
     setSelectedFiles([]);
+    setDocumentName('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -431,13 +435,17 @@ export default function VaultDashboard({ currentUser }) {
     try {
       let res;
       if (entryMode === 'file') {
+        const isUnlimitedDl = maxDownloads === 'unlimited' || !maxDownloads || maxDownloads === '';
         const formData = new FormData();
         selectedFiles.forEach((file) => {
           formData.append('files', file);
         });
+        if (documentName.trim()) {
+          formData.append('name', documentName.trim());
+        }
         formData.append('expiry', effectiveExpiry);
         formData.append('storage_mode', storageMode);
-        formData.append('max_downloads', maxDownloads === 'unlimited' ? '' : maxDownloads);
+        formData.append('max_downloads', isUnlimitedDl ? '' : maxDownloads);
         formData.append('delete_after_download', deleteAfterDownload ? 'true' : 'false');
         res = await fetch(apiUrl('/documents/upload'), {
           method: 'POST',
@@ -445,6 +453,7 @@ export default function VaultDashboard({ currentUser }) {
           body: formData,
         });
       } else {
+        const isUnlimitedDl = maxDownloads === 'unlimited' || !maxDownloads || maxDownloads === '';
         res = await fetch(apiUrl('/documents/upload'), {
           method: 'POST',
           headers: {
@@ -456,7 +465,7 @@ export default function VaultDashboard({ currentUser }) {
             title: textTitle.trim() || 'Secure_Note.txt',
             expiry: effectiveExpiry,
             storage_mode: storageMode,
-            max_downloads: maxDownloads === 'unlimited' ? null : maxDownloads,
+            max_downloads: isUnlimitedDl ? null : maxDownloads,
             delete_after_download: deleteAfterDownload,
           }),
         });
@@ -479,6 +488,7 @@ export default function VaultDashboard({ currentUser }) {
 
       if (entryMode === 'file') {
         setSelectedFiles([]);
+        setDocumentName('');
         if (fileInputRef.current) fileInputRef.current.value = '';
       } else {
         setTextContent('');
@@ -742,10 +752,17 @@ export default function VaultDashboard({ currentUser }) {
                     if (!['30m', '1h', '24h', '7d'].includes(expiryOption)) {
                       setExpiryOption('24h');
                     }
+                    if (maxDownloads === 'unlimited' || !maxDownloads) {
+                      setMaxDownloads(5);
+                    }
                   } else if (mode === 'temporary') {
                     setExpiryOption('1h');
+                    setMaxDownloads('unlimited');
+                    setDeleteAfterDownload(false);
                   } else if (mode === 'long_term') {
                     setExpiryOption('never');
+                    setMaxDownloads('unlimited');
+                    setDeleteAfterDownload(false);
                   }
                 }}
               />
@@ -893,6 +910,40 @@ export default function VaultDashboard({ currentUser }) {
                         </div>
                       )}
                     </div>
+
+                    {/* Optional Custom Document Name */}
+                    <div className="bg-[#121215] p-3 rounded-xl border border-[#27272A] hover:border-zinc-700 transition-all">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-[#E11D2E]" />
+                          <span>Custom Document / Archive Name</span>
+                          <span className="text-zinc-400 font-normal text-[10px] bg-zinc-800/80 px-1.5 py-0.5 rounded border border-zinc-700/50">Optional</span>
+                        </label>
+                        <span className="text-[10px] text-zinc-400 font-mono">
+                          {documentName.trim()
+                            ? `${documentName.trim().replace(/\.zip$/i, '')}.zip`
+                            : selectedFiles.length === 1
+                            ? `${selectedFiles[0].name.replace(/\.[^/.]+$/, '')}.zip`
+                            : selectedFiles.length > 1
+                            ? `vault-${selectedFiles.length}files.zip`
+                            : 'Default: Original File Name'}
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={documentName}
+                        onChange={(e) => setDocumentName(e.target.value)}
+                        placeholder={
+                          selectedFiles.length === 1
+                            ? `e.g. ${selectedFiles[0].name.replace(/\.[^/.]+$/, '')} (leave blank to keep original file name)`
+                            : "e.g. Project_Contracts, Backup_Oct2026... (leave blank for default)"
+                        }
+                        className="w-full bg-[#18181B] border border-[#27272A] focus:border-[#E11D2E] rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none transition-all"
+                      />
+                      <p className="text-[10px] text-zinc-500 mt-1">
+                        If not mentioned or left blank, the document automatically saves with its original file name.
+                      </p>
+                    </div>
                   </div>
                 ) : (
                   /* Text Input Area */
@@ -982,7 +1033,7 @@ export default function VaultDashboard({ currentUser }) {
                             type="button"
                             onClick={() => {
                               setTextTitle('Confidential_Note');
-                              setTextContent('CONFIDENTIAL NOTE:\nThis message is encrypted with SECURE VAULT.\nAccess code will expire per configuration.');
+                              setTextContent('CONFIDENTIAL NOTE:\nThis message is encrypted with DocQevrilo.\nAccess code will expire per configuration.');
                               setUploadError('');
                             }}
                             className="px-1.5 py-0.5 rounded bg-[#18181B] hover:text-white hover:border-[#E11D2E]/50 border border-[#27272A] transition-all cursor-pointer"
@@ -1027,177 +1078,24 @@ export default function VaultDashboard({ currentUser }) {
                     </div>
                   </div>
                 ) : (
-                  /* Temporary Storage Auto-Purge Expiry Selector */
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between bg-[#121215] p-3 rounded-xl border border-[#27272A] hover:border-[#3F3F46] transition-all">
-                      <div className="flex items-center gap-2 text-xs text-zinc-300">
-                        <Clock className="w-4 h-4 text-[#E11D2E]" />
-                        <span className="font-medium">Auto-Expire:</span>
-                      </div>
-                      <select
-                        value={expiryOption}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setExpiryOption(val);
-                          if (val === 'custom' && !customDateTime) {
-                            setCustomDateTime(getDefaultDateTime());
-                          }
-                        }}
-                        className="bg-[#18181B] border border-[#27272A] text-xs text-white rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#E11D2E] cursor-pointer"
-                      >
-                        <optgroup label="Popular Presets">
-                          <option value="5m">5 Minutes (Quick View)</option>
-                          <option value="10m">10 Minutes</option>
-                          <option value="30m">30 Minutes</option>
-                          <option value="1h">1 Hour (Default)</option>
-                          <option value="6h">6 Hours</option>
-                          <option value="12h">12 Hours</option>
-                          <option value="24h">24 Hours</option>
-                          <option value="3d">3 Days</option>
-                        </optgroup>
-                        <optgroup label="Custom">
-                          <option value="custom">⚙️ Custom (Your Choice...)</option>
-                        </optgroup>
-                      </select>
-                    </div>
-
-                    {/* Custom Option: "Your Choice" Drawer */}
-                    {expiryOption === 'custom' && (
-                      <div className="p-3.5 bg-[#121215] border border-[#E11D2E]/40 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                        <div className="flex items-center justify-between pb-2 border-b border-[#27272A]">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                            <Sliders className="w-3.5 h-3.5 text-[#E11D2E]" />
-                            <span>Custom Expiry: Your Choice</span>
-                          </div>
-                          {/* Mode Switcher */}
-                          <div className="flex items-center p-0.5 bg-[#18181B] rounded-lg border border-[#27272A] text-[11px]">
-                            <button
-                              type="button"
-                              onClick={() => setCustomMode('duration')}
-                              className={`px-2.5 py-1 rounded-md transition-all ${
-                                customMode === 'duration'
-                                  ? 'bg-[#E11D2E] text-white font-medium shadow-sm'
-                                  : 'text-zinc-400 hover:text-white'
-                              }`}
-                            >
-                              Duration
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCustomMode('date');
-                                if (!customDateTime) setCustomDateTime(getDefaultDateTime());
-                              }}
-                              className={`px-2.5 py-1 rounded-md transition-all ${
-                                customMode === 'date'
-                                  ? 'bg-[#E11D2E] text-white font-medium shadow-sm'
-                                  : 'text-zinc-400 hover:text-white'
-                              }`}
-                            >
-                              Date & Time
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Duration Mode */}
-                        {customMode === 'duration' ? (
-                          <div className="space-y-2.5">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1">
-                                <label className="block text-[10px] text-zinc-400 uppercase tracking-wider mb-1">
-                                  Duration Value
-                                </label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max="999"
-                                  value={customDurationValue}
-                                  onChange={(e) => setCustomDurationValue(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                                  className="w-full bg-[#18181B] border border-[#27272A] rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-[#E11D2E]"
-                                />
-                              </div>
-                              <div className="flex-1">
-                                <label className="block text-[10px] text-zinc-400 uppercase tracking-wider mb-1">
-                                  Unit
-                                </label>
-                                <select
-                                  value={customDurationUnit}
-                                  onChange={(e) => setCustomDurationUnit(e.target.value)}
-                                  className="w-full bg-[#18181B] border border-[#27272A] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#E11D2E]"
-                                >
-                                  <option value="m">Minute(s)</option>
-                                  <option value="h">Hour(s)</option>
-                                  <option value="d">Day(s)</option>
-                                  <option value="w">Week(s)</option>
-                                  <option value="mo">Month(s)</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            {/* Quick selection chips */}
-                            <div>
-                              <div className="text-[10px] text-zinc-400 mb-1.5">Quick selections:</div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {[
-                                  { label: '15m', val: 15, unit: 'm' },
-                                  { label: '45m', val: 45, unit: 'm' },
-                                  { label: '2h', val: 2, unit: 'h' },
-                                  { label: '12h', val: 12, unit: 'h' },
-                                  { label: '3d', val: 3, unit: 'd' },
-                                ].map((chip) => (
-                                  <button
-                                    type="button"
-                                    key={chip.label}
-                                    onClick={() => {
-                                      setCustomDurationValue(chip.val);
-                                      setCustomDurationUnit(chip.unit);
-                                    }}
-                                    className={`text-[10px] px-2 py-0.5 rounded border transition-all ${
-                                      customDurationValue === chip.val && customDurationUnit === chip.unit
-                                        ? 'bg-red-950/80 border-[#E11D2E] text-white font-semibold'
-                                        : 'bg-[#18181B] border-[#27272A] text-zinc-400 hover:text-white hover:border-zinc-600'
-                                    }`}
-                                  >
-                                    {chip.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          /* Date & Time Mode */
-                          <div className="space-y-1.5">
-                            <label className="block text-[10px] text-zinc-400 uppercase tracking-wider">
-                              Choose Specific Expiration Date & Time
-                            </label>
-                            <div className="relative">
-                              <input
-                                type="datetime-local"
-                                value={customDateTime}
-                                min={getMinDateTime()}
-                                onChange={(e) => setCustomDateTime(e.target.value)}
-                                className="w-full bg-[#18181B] border border-[#27272A] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#E11D2E] [color-scheme:dark]"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Live Expiry Summary Tag */}
-                    {(() => {
-                      const preview = getExpiryPreview();
-                      if (!preview) return null;
-                      return (
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#18181B]/70 border border-[#27272A] text-[11px]">
-                          <Clock className={`w-3.5 h-3.5 shrink-0 ${preview.isNever ? 'text-emerald-400' : preview.isError ? 'text-amber-400' : 'text-[#E11D2E]'}`} />
-                          <span className={`truncate ${preview.isNever ? 'text-emerald-400 font-medium' : preview.isError ? 'text-amber-400 font-medium' : 'text-zinc-300'}`}>
-                            {preview.text}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </div>
+                  <TemporaryStorageSettings
+                    expiry={expiryOption}
+                    setExpiry={setExpiryOption}
+                    maxDownloads={maxDownloads}
+                    setMaxDownloads={setMaxDownloads}
+                    deleteAfterDownload={deleteAfterDownload}
+                    setDeleteAfterDownload={setDeleteAfterDownload}
+                    customMode={customMode}
+                    setCustomMode={setCustomMode}
+                    customDurationValue={customDurationValue}
+                    setCustomDurationValue={setCustomDurationValue}
+                    customDurationUnit={customDurationUnit}
+                    setCustomDurationUnit={setCustomDurationUnit}
+                    customDateTime={customDateTime}
+                    setCustomDateTime={setCustomDateTime}
+                    getDefaultDateTime={getDefaultDateTime}
+                    getMinDateTime={getMinDateTime}
+                  />
                 )}
 
                 {/* Progress bar */}

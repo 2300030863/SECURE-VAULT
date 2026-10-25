@@ -237,7 +237,7 @@ export default function ResetPassword() {
                 Password Updated!
               </h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                Your Secure Vault password has been reset successfully. You can now log into your account.
+                Your DocQevrilo password has been reset successfully. You can now log into your account.
               </p>
               <Link to="/login" className="sv-btn-primary" style={{ display: 'inline-flex', justifyContent: 'center' }}>
                 Sign In Now

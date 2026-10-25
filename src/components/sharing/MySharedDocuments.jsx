@@ -18,6 +18,8 @@ import {
   Lock,
   ExternalLink,
   X,
+  Sliders,
+  Settings,
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { apiUrl } from '../../config/api';
@@ -30,6 +32,56 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [previewDocId, setPreviewDocId] = useState(null);
+
+  // Edit / Limit Adjustment State
+  const [editingDoc, setEditingDoc] = useState(null);
+  const [editStorageMode, setEditStorageMode] = useState('online');
+  const [editMaxDownloads, setEditMaxDownloads] = useState('unlimited');
+  const [editDeleteAfterDownload, setEditDeleteAfterDownload] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  const openEditModal = (doc) => {
+    setEditingDoc(doc);
+    setEditStorageMode(doc.storage_mode || 'online');
+    setEditMaxDownloads(doc.max_downloads != null ? doc.max_downloads : 'unlimited');
+    setEditDeleteAfterDownload(Boolean(doc.delete_after_download));
+    setEditError('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingDoc) return;
+    setIsSavingEdit(true);
+    setEditError('');
+
+    try {
+      const isUnlimited = editMaxDownloads === 'unlimited' || editMaxDownloads === '' || editMaxDownloads === null;
+      const res = await fetch(apiUrl(`/documents/${editingDoc.id}`), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authService.getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          storage_mode: editStorageMode,
+          max_downloads: isUnlimited ? null : Number(editMaxDownloads),
+          delete_after_download: editDeleteAfterDownload,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update document settings.');
+      }
+
+      setEditingDoc(null);
+      fetchDocuments();
+    } catch (err) {
+      setEditError(err.message || 'Error updating document.');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const formatBytes = (bytes) => {
     if (!bytes || bytes === 0) return '0 Bytes';
@@ -281,15 +333,25 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                       )}
                     </div>
 
-                    {/* Delete Trigger */}
-                    <button
-                      type="button"
-                      onClick={() => setDeletingDoc(doc)}
-                      className="p-1 text-zinc-500 hover:text-red-400 rounded hover:bg-red-950/40 transition-colors cursor-pointer"
-                      title="Delete archive from B2 and TiDB"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Card Actions: Edit Limits & Delete */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(doc)}
+                        className="p-1 text-zinc-500 hover:text-white rounded hover:bg-zinc-800 transition-colors cursor-pointer"
+                        title="Configure download limit & storage mode"
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingDoc(doc)}
+                        className="p-1 text-zinc-500 hover:text-red-400 rounded hover:bg-red-950/40 transition-colors cursor-pointer"
+                        title="Delete archive from B2 and TiDB"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* File Info */}
@@ -573,6 +635,168 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
                     Confirm Permanent Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Storage & Download Limits Modal Dialog */}
+      {editingDoc && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#27272A]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-red-950/60 border border-[#E11D2E]/40 flex items-center justify-center text-[#E11D2E]">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Adjust Storage & Downloads</h4>
+                  <p className="text-[11px] text-zinc-400 font-mono truncate max-w-[220px]">
+                    #{editingDoc.id} · {editingDoc.original_name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingDoc(null)}
+                className="p-1 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Storage Mode Selector */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-semibold text-zinc-300">
+                Storage Architecture
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { id: 'temporary', label: 'Temporary', desc: 'Auto-Purge' },
+                  { id: 'online', label: 'Online', desc: 'Controlled' },
+                  { id: 'long_term', label: 'Long-Term', desc: 'Archived' },
+                ].map((mode) => (
+                  <button
+                    type="button"
+                    key={mode.id}
+                    onClick={() => {
+                      setEditStorageMode(mode.id);
+                      if (mode.id === 'temporary' || mode.id === 'long_term') {
+                        if (editMaxDownloads === 5) setEditMaxDownloads('unlimited');
+                      }
+                    }}
+                    className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                      editStorageMode === mode.id
+                        ? 'bg-red-950/70 border-[#E11D2E] text-white font-bold shadow-sm'
+                        : 'bg-[#121215] border-[#27272A] text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="text-xs">{mode.label}</div>
+                    <div className="text-[10px] text-zinc-500">{mode.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Download Limit Selector */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
+                  <Download className="w-3.5 h-3.5 text-[#E11D2E]" />
+                  <span>Maximum Downloads</span>
+                </label>
+                <span className="text-[10px] text-zinc-400">Current: {editingDoc.download_count || 0} downloaded</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { label: 'Unlimited (∞)', value: 'unlimited' },
+                  { label: '1 Download', value: 1 },
+                  { label: '5 Downloads', value: 5 },
+                  { label: '10 Downloads', value: 10 },
+                ].map((opt) => {
+                  const isSelected =
+                    opt.value === 'unlimited'
+                      ? editMaxDownloads === 'unlimited' || editMaxDownloads === null || editMaxDownloads === ''
+                      : Number(editMaxDownloads) === opt.value;
+
+                  return (
+                    <button
+                      type="button"
+                      key={String(opt.value)}
+                      onClick={() => setEditMaxDownloads(opt.value)}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-red-950/70 border-[#E11D2E] text-white shadow-sm'
+                          : 'bg-[#121215] border-[#27272A] text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Burn-on-read toggle */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-[#121215] border border-[#27272A]">
+              <div className="flex items-start gap-2.5">
+                <Flame className={`w-4 h-4 mt-0.5 ${editDeleteAfterDownload ? 'text-red-400' : 'text-zinc-500'}`} />
+                <div>
+                  <div className="text-xs font-semibold text-white">Delete After First Download</div>
+                  <div className="text-[10px] text-zinc-400">Purges file from Backblaze B2 once downloaded.</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditDeleteAfterDownload(!editDeleteAfterDownload)}
+                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 border ${
+                  editDeleteAfterDownload
+                    ? 'bg-[#E11D2E] border-[#E11D2E]'
+                    : 'bg-[#27272A] border-[#3F3F46]'
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 absolute top-0.5 ${
+                    editDeleteAfterDownload ? 'left-6' : 'left-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="p-2.5 rounded-lg bg-red-950/40 border border-red-800 text-xs text-red-300">
+                {editError}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingDoc(null)}
+                disabled={isSavingEdit}
+                className="px-4 py-2 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-xs font-semibold text-zinc-300 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+                className="px-4 py-2 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] text-xs font-semibold text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-red-950/40"
+              >
+                {isSavingEdit ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Changes</span>
                   </>
                 )}
               </button>

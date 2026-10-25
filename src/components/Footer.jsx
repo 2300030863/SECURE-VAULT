@@ -13,8 +13,8 @@ export default function Footer() {
           <div className="sv-footer-brand">
             <Logo />
             <p className="sv-footer-desc">
-              A private, high-security document sharing platform. Distribute PDFs, presentations,
-              and confidential assets protected by individual retrieval access codes.
+              DocQevrilo — A smarter way to share documents securely. Distribute PDFs, presentations,
+              notes, and confidential assets protected by individual retrieval access codes.
             </p>
           </div>
 
@@ -26,6 +26,15 @@ export default function Footer() {
                 <li><Link to="/vault">Document Vault</Link></li>
                 <li><Link to="/login">Sign In</Link></li>
                 <li><Link to="/register">Create Account</Link></li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent('open_brand_meaning'))}
+                    className="text-left text-[#E11D2E] hover:underline cursor-pointer bg-transparent border-0 p-0 text-xs font-semibold"
+                  >
+                    ✨ Brand Meaning
+                  </button>
+                </li>
               </ul>
             </div>
 
@@ -42,7 +51,7 @@ export default function Footer() {
 
         <div className="sv-footer-bottom">
           <div>
-            &copy; {currentYear} Secure Vault. All rights reserved.
+            &copy; {currentYear} DocQevrilo. One Code. Simple Sharing.
           </div>
           <div className="sv-privacy-note">
             <ShieldCheck size={16} />

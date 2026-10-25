@@ -10,6 +10,7 @@ import './styles/welcome.css';
 // Import Shared Components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import BrandMeaningModal from './components/BrandMeaningModal';
 
 // Import Pages
 import Welcome from './pages/Welcome';
@@ -83,6 +84,7 @@ export default function App() {
         </main>
 
         <Footer />
+        <BrandMeaningModal />
       </div>
     </Router>
   );
