@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Mail, Shield, ArrowRight } from 'lucide-react';
+import { User, Mail, Shield, ArrowRight, Briefcase, KeyRound } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
 import PasswordInput from '../components/PasswordInput';
 import FormMessage from '../components/FormMessage';
@@ -12,6 +12,8 @@ export default function Register() {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
+    occupation: '',
+    securityPin: '',
     password: '',
     confirmPassword: '',
     agreeTerms: false,
@@ -34,6 +36,16 @@ export default function Register() {
       newErrors.email = 'Email address is required.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
       newErrors.email = 'Please provide a valid email format.';
+    }
+
+    if (!formData.occupation) {
+      newErrors.occupation = 'Please select your occupation.';
+    }
+
+    if (!formData.securityPin) {
+      newErrors.securityPin = 'A 4-digit security PIN is required.';
+    } else if (!/^\d{4}$/.test(formData.securityPin.trim())) {
+      newErrors.securityPin = 'PIN must be exactly 4 digits (0-9).';
     }
 
     if (!formData.password) {
@@ -80,6 +92,8 @@ export default function Register() {
       const result = await authService.register({
         fullName: formData.fullName.trim(),
         email: formData.email.trim(),
+        occupation: formData.occupation,
+        securityPin: formData.securityPin.trim(),
         password: formData.password,
       });
 
@@ -177,6 +191,81 @@ export default function Register() {
               {errors.email && (
                 <span id="reg-email-error" className="sv-field-error" role="alert">
                   {errors.email}
+                </span>
+              )}
+            </div>
+
+            {/* Occupation */}
+            <div className="sv-form-group">
+              <label htmlFor="reg-occupation" className="sv-label">
+                <span>Occupation</span>
+              </label>
+              <div className="sv-input-wrapper">
+                <Briefcase size={18} className="sv-input-icon" aria-hidden="true" />
+                <select
+                  id="reg-occupation"
+                  name="occupation"
+                  value={formData.occupation}
+                  onChange={handleChange}
+                  className="sv-input"
+                  disabled={isSubmitting}
+                  style={{ cursor: 'pointer', appearance: 'auto', backgroundColor: '#18181b', color: '#fafafa' }}
+                  required
+                >
+                  <option value="">Select your occupation...</option>
+                  <option value="Student">Student</option>
+                  <option value="Teacher">Teacher</option>
+                  <option value="Professor">Professor</option>
+                  <option value="Researcher">Researcher</option>
+                  <option value="Software Engineer / Developer">Software Engineer / Developer</option>
+                  <option value="Doctor / Healthcare">Doctor / Healthcare</option>
+                  <option value="Lawyer / Legal">Lawyer / Legal</option>
+                  <option value="Finance / Accountant">Finance / Accountant</option>
+                  <option value="Business / Entrepreneur">Business / Entrepreneur</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              {errors.occupation && (
+                <span id="reg-occupation-error" className="sv-field-error" role="alert">
+                  {errors.occupation}
+                </span>
+              )}
+            </div>
+
+            {/* 4-Digit Security PIN */}
+            <div className="sv-form-group">
+              <label htmlFor="reg-pin" className="sv-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>4-Digit Security PIN</span>
+                <span style={{ fontSize: '0.7rem', color: '#a1a1aa', fontWeight: 'normal' }}>
+                  (To reveal / regenerate vault codes)
+                </span>
+              </label>
+              <div className="sv-input-wrapper">
+                <KeyRound size={18} className="sv-input-icon" aria-hidden="true" />
+                <input
+                  id="reg-pin"
+                  name="securityPin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  value={formData.securityPin}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    setFormData((prev) => ({ ...prev, securityPin: val }));
+                    if (errors.securityPin) setErrors((prev) => ({ ...prev, securityPin: '' }));
+                  }}
+                  placeholder="e.g. 5824"
+                  className="sv-input"
+                  autoComplete="off"
+                  required
+                  disabled={isSubmitting}
+                  aria-invalid={Boolean(errors.securityPin)}
+                />
+              </div>
+              {errors.securityPin && (
+                <span id="reg-pin-error" className="sv-field-error" role="alert">
+                  {errors.securityPin}
                 </span>
               )}
             </div>

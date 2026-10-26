@@ -65,6 +65,9 @@ export default function App() {
           isAuthenticated={Boolean(currentUser)}
           currentUser={currentUser}
           onLogout={handleLogout}
+          onProfileUpdated={(updatedUser) => {
+            setCurrentUser(updatedUser);
+          }}
         />
 
         <main style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -83,7 +86,8 @@ export default function App() {
           </Routes>
         </main>
 
-        <Footer />
+        {/* Only show footer when user is not signed in */}
+        {!currentUser && <Footer />}
         <BrandMeaningModal />
       </div>
     </Router>

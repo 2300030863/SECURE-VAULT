@@ -20,9 +20,14 @@ import {
   X,
   Sliders,
   Settings,
+  EyeOff,
+  ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { apiUrl } from '../../config/api';
+import VaultCodeSecurityModal from './VaultCodeSecurityModal';
+import AiDocumentModal from '../ai/AiDocumentModal';
 
 export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
   const [documents, setDocuments] = useState([]);
@@ -40,6 +45,14 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
   const [editDeleteAfterDownload, setEditDeleteAfterDownload] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState('');
+  
+  // 2FA Access Code Protection State
+  const [revealedCodes, setRevealedCodes] = useState({});
+  const [securityModalDoc, setSecurityModalDoc] = useState(null);
+  const [securityModalAction, setSecurityModalAction] = useState('reveal');
+
+  // AI Document Assistant State
+  const [aiModalDoc, setAiModalDoc] = useState(null);
 
   const openEditModal = (doc) => {
     setEditingDoc(doc);
@@ -115,14 +128,37 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
     }
   };
 
+  const getDocViewUrl = (doc) => {
+    let rawUrl =
+      doc.view_url ||
+      (doc.access_code
+        ? `/api/documents/view/${encodeURIComponent(doc.access_code)}`
+        : `/api/documents/owner/${doc.id}/view`);
+
+    const token = authService.getToken ? authService.getToken() : (sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token'));
+    if (token && !rawUrl.includes('token=')) {
+      rawUrl += (rawUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+    }
+    return apiUrl(rawUrl);
+  };
+
+  const getDocDownloadUrl = (doc) => {
+    let rawUrl =
+      doc.download_url ||
+      (doc.access_code
+        ? `/api/documents/download/${encodeURIComponent(doc.access_code)}?action=download`
+        : `/api/documents/owner/${doc.id}/download`);
+
+    const token = authService.getToken ? authService.getToken() : (sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token'));
+    if (token && !rawUrl.includes('token=')) {
+      rawUrl += (rawUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+    }
+    return apiUrl(rawUrl);
+  };
+
   const handleDownloadCard = async (doc) => {
     try {
-      const dlUrl = apiUrl(
-        doc.download_url ||
-        (doc.access_code
-          ? `/api/documents/download/${encodeURIComponent(doc.access_code)}?action=download`
-          : `/api/documents/owner/${doc.id}/download`)
-      );
+      const dlUrl = getDocDownloadUrl(doc);
 
       const tempLink = document.createElement('a');
       tempLink.href = dlUrl;
@@ -231,22 +267,25 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
   }
 
   return (
-    <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-6 sm:p-7 shadow-xl">
+    <div className="bg-[#121215]/90 border border-zinc-800/80 rounded-2xl p-6 sm:p-7 shadow-xl shadow-black/40 relative overflow-hidden group">
+      {/* Subtle top hairline highlight */}
+      <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#E11D2E]/30 to-transparent"></div>
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-lg font-bold text-white">Your Shared Online Vaults</h3>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-red-950/60 text-[#E11D2E] border border-[#E11D2E]/30">
+            <h3 className="text-base font-bold text-white">Your Shared Online Vaults</h3>
+            <span className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300">
               {documents.length} {documents.length === 1 ? 'vault' : 'vaults'}
             </span>
             {documents.length > 0 && (
               <>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-800/40 flex items-center gap-1 shadow-sm">
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-cyan-950/40 text-cyan-300 border border-cyan-800/40 flex items-center gap-1 shadow-xs font-mono">
                   <Eye className="w-2.5 h-2.5 text-cyan-400" />
                   {totalViews} {totalViews === 1 ? 'view' : 'views'}
                 </span>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800/40 flex items-center gap-1 shadow-sm">
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 flex items-center gap-1 shadow-xs font-mono">
                   <Download className="w-2.5 h-2.5 text-emerald-400" />
                   {totalDownloads} {totalDownloads === 1 ? 'download' : 'downloads'}
                 </span>
@@ -254,14 +293,14 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
             )}
           </div>
           <p className="text-xs text-zinc-400 mt-1">
-            Monitored archives in private Backblaze B2 with real-time views, downloads, and expiry enforcement.
+            Active archives in Backblaze B2 with real-time access monitoring and automated expiry.
           </p>
         </div>
 
         <button
           type="button"
           onClick={fetchDocuments}
-          className="self-start sm:self-center px-2.5 py-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-[#27272A] transition-all cursor-pointer flex items-center gap-1.5 text-xs font-medium border border-zinc-800 hover:border-zinc-700"
+          className="self-start sm:self-center px-3 py-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-medium shadow-xs"
           title="Refresh vault list and sync view & download counts"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#E11D2E]' : ''}`} />
@@ -271,7 +310,7 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
 
       {/* Documents Grid / Empty State */}
       {documents.length === 0 ? (
-        <div className="text-center py-12 px-4 bg-[#121215] border border-dashed border-[#27272A] rounded-xl">
+        <div className="text-center py-12 px-4 bg-zinc-950/40 border border-dashed border-zinc-800/80 rounded-xl">
           <Archive className="w-10 h-10 text-zinc-600 mx-auto mb-2.5" />
           <p className="text-sm font-semibold text-zinc-300">No active online archives</p>
           <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
@@ -290,7 +329,7 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
             return (
               <div
                 key={doc.id}
-                className="bg-[#121215] border border-[#27272A] hover:border-[#E11D2E]/40 rounded-xl p-4 flex flex-col justify-between transition-all shadow-md group relative self-start"
+                className="bg-zinc-950/60 border border-zinc-800/80 hover:border-zinc-700 rounded-xl p-4 flex flex-col justify-between transition-all duration-150 shadow-xs hover:shadow-md group relative self-start"
               >
                 <div>
                   {/* Top Bar: Badges & Delete */}
@@ -455,43 +494,97 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                   </div>
                 </div>
 
-                {/* Bottom Access Code Box */}
-                {doc.access_code ? (
-                  <div className="pt-2.5 border-t border-[#27272A]/80">
-                    <div className="text-[11px] text-zinc-400 mb-1 flex items-center justify-between">
+                {/* Bottom Access Code Box - Password + PIN / OTP Gated */}
+                <div className="pt-2.5 border-t border-[#27272A]/80">
+                  <div className="text-[11px] text-zinc-400 mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-zinc-300 font-medium">
+                      <Lock className="w-3 h-3 text-[#E11D2E]" />
                       <span>Access Code</span>
-                      <span className="text-[10px] text-emerald-400 font-medium">Ready to share</span>
-                    </div>
-                    <div className="flex items-center justify-between bg-[#0B0B0D] px-2.5 py-1.5 rounded-lg border border-[#27272A] gap-2">
-                      <code className="font-mono-code text-xs text-white font-bold tracking-wider truncate">
-                        {doc.access_code}
-                      </code>
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {revealedCodes[doc.id] ? (
+                        <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">
+                          Unlocked
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-zinc-400 font-medium">
+                          2FA Protected
+                        </span>
+                      )}
                       <button
                         type="button"
-                        onClick={() => copyCode(doc.access_code)}
-                        className="px-2 py-1 rounded bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer shadow-sm shrink-0"
-                        title="Copy access code"
+                        onClick={() => {
+                          setSecurityModalDoc(doc);
+                          setSecurityModalAction('regenerate');
+                        }}
+                        className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                        title="Regenerate access code (Requires Password + PIN / OTP)"
                       >
-                        {copiedCode === doc.access_code ? (
-                          <>
-                            <Check className="w-3 h-3" />
-                            <span>Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>Copy</span>
-                          </>
-                        )}
+                        <RefreshCw className="w-3 h-3 text-zinc-400 hover:text-[#E11D2E]" />
                       </button>
                     </div>
                   </div>
-                ) : (
-                  <div className="pt-2.5 border-t border-[#27272A]/80 text-[11px] text-zinc-500 flex items-center justify-between">
-                    <span>Access Code</span>
-                    <span className="text-zinc-400 font-mono text-[10px]">HMAC Hash Protected</span>
-                  </div>
-                )}
+
+                  {revealedCodes[doc.id] ? (
+                    <div className="flex items-center justify-between bg-[#0B0B0D] px-2.5 py-1.5 rounded-lg border border-emerald-600/30 gap-2">
+                      <code className="font-mono-code text-xs text-white font-bold tracking-wider truncate">
+                        {revealedCodes[doc.id]}
+                      </code>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => copyCode(revealedCodes[doc.id])}
+                          className="px-2 py-1 rounded bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                          title="Copy access code"
+                        >
+                          {copiedCode === revealedCodes[doc.id] ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              <span>Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRevealedCodes((prev) => {
+                              const next = { ...prev };
+                              delete next[doc.id];
+                              return next;
+                            });
+                          }}
+                          className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all cursor-pointer"
+                          title="Hide access code"
+                        >
+                          <EyeOff className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between bg-[#0B0B0D] px-2.5 py-1.5 rounded-lg border border-[#27272A] gap-2">
+                      <span className="font-mono text-zinc-500 text-xs tracking-widest select-none">
+                        ••••••••••
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSecurityModalDoc(doc);
+                          setSecurityModalAction('reveal');
+                        }}
+                        className="px-2.5 py-1 rounded bg-[#18181B] hover:bg-[#27272A] border border-[#27272A] hover:border-[#E11D2E]/50 text-zinc-200 hover:text-white text-[11px] font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                        title="Enter login password + PIN or OTP to reveal code"
+                      >
+                        <Lock className="w-3 h-3 text-[#E11D2E]" />
+                        <span>Show Code</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 {/* Direct Card Action Buttons: View & Download */}
                 <div className="pt-2.5 mt-2.5 border-t border-[#27272A]/80 flex items-center gap-2">
@@ -534,6 +627,17 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                   </button>
                 </div>
 
+                {/* DocQevrilo AI Assistant Button */}
+                <button
+                  type="button"
+                  onClick={() => setAiModalDoc(doc)}
+                  className="w-full mt-2 py-1.5 px-3 rounded-lg bg-gradient-to-r from-red-950/70 via-[#18181B] to-red-950/50 hover:from-red-900/90 hover:to-zinc-800 border border-[#E11D2E]/40 hover:border-[#E11D2E] text-zinc-100 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-red-950/30 group"
+                  title="Summarize document, ask AI questions, and generate quizzes"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[#E11D2E] group-hover:rotate-12 transition-transform" />
+                  <span>✨ Ask AI & Summarize</span>
+                </button>
+
                 {/* Inline Preview Drawer */}
                 {previewDocId === doc.id && (
                   <div className="mt-2.5 p-2 bg-[#0B0B0D] border border-[#27272A] rounded-xl overflow-hidden animate-in fade-in duration-150">
@@ -544,12 +648,7 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                       </span>
                       <div className="flex items-center gap-2 shrink-0">
                         <a
-                          href={apiUrl(
-                            doc.view_url ||
-                            (doc.access_code
-                              ? `/api/documents/view/${encodeURIComponent(doc.access_code)}`
-                              : `/api/documents/owner/${doc.id}/view`)
-                          )}
+                          href={getDocViewUrl(doc)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 text-zinc-400 hover:text-white hover:underline text-[10px]"
@@ -569,12 +668,7 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                       </div>
                     </div>
                     <iframe
-                      src={apiUrl(
-                        doc.view_url ||
-                        (doc.access_code
-                          ? `/api/documents/view/${encodeURIComponent(doc.access_code)}`
-                          : `/api/documents/owner/${doc.id}/view`)
-                      )}
+                      src={getDocViewUrl(doc)}
                       title={`Preview ${doc.original_name}`}
                       className="w-full h-80 rounded-lg border border-zinc-800 bg-[#121215]"
                     />
@@ -803,6 +897,36 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 2FA Security Modal for Access Code Reveal / Regenerate */}
+      <VaultCodeSecurityModal
+        isOpen={Boolean(securityModalDoc)}
+        onClose={() => setSecurityModalDoc(null)}
+        doc={securityModalDoc}
+        action={securityModalAction}
+        currentUser={currentUser}
+        onSuccess={(accessCode) => {
+          if (securityModalDoc) {
+            setRevealedCodes((prev) => ({
+              ...prev,
+              [securityModalDoc.id]: accessCode,
+            }));
+            setDocuments((prev) =>
+              prev.map((d) => (d.id === securityModalDoc.id ? { ...d, access_code: accessCode } : d))
+            );
+          }
+        }}
+      />
+
+      {/* DocQevrilo AI Assistant Modal */}
+      {aiModalDoc && (
+        <AiDocumentModal
+          isOpen={Boolean(aiModalDoc)}
+          onClose={() => setAiModalDoc(null)}
+          doc={aiModalDoc}
+          accessCode={aiModalDoc.access_code || revealedCodes[aiModalDoc.id] || ''}
+        />
       )}
     </div>
   );

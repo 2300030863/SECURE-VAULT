@@ -38,11 +38,17 @@ import {
   Flame,
   HardDrive,
   Tag,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  SlidersHorizontal,
+  Zap,
 } from 'lucide-react';
 import StorageModeSelector from '../components/sharing/StorageModeSelector';
 import OnlineSharingSettings from '../components/sharing/OnlineSharingSettings';
 import TemporaryStorageSettings from '../components/sharing/TemporaryStorageSettings';
 import MySharedDocuments from '../components/sharing/MySharedDocuments';
+import AiDocumentModal from '../components/ai/AiDocumentModal';
 
 export default function VaultDashboard({ currentUser }) {
   const navigate = useNavigate();
@@ -83,6 +89,8 @@ export default function VaultDashboard({ currentUser }) {
   const [copySuccess, setCopySuccess] = useState(false);
   const [textCopySuccess, setTextCopySuccess] = useState(false);
   const [showInlinePreview, setShowInlinePreview] = useState(false);
+  const [aiModalDoc, setAiModalDoc] = useState(null);
+  const [showSettingsAccordion, setShowSettingsAccordion] = useState(false);
   const fileInputRef = useRef(null);
 
   // Helper date generators for datetime-local picker
@@ -627,25 +635,31 @@ export default function VaultDashboard({ currentUser }) {
   };
 
   return (
-    <div className="w-full flex-1 flex flex-col items-center bg-[#0B0B0D] text-[#ECECF1] font-sans selection:bg-[#E11D2E] selection:text-white relative bg-grid-pattern">
+    <div className="w-full flex-1 flex flex-col items-center bg-[#09090B] text-[#ECECF1] font-sans selection:bg-[#E11D2E] selection:text-white relative overflow-hidden">
+      {/* Subtle Minimalist Atmospheric Background Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[360px] bg-gradient-to-b from-red-600/[0.08] via-red-950/[0.03] to-transparent blur-3xl pointer-events-none -z-10" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:28px_28px] pointer-events-none -z-10" />
+
       {/* Main Content Container */}
       <div className="max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
         {/* Status Utility Bar */}
-        <div className="flex items-center justify-between mb-8 pb-3 border-b border-[#27272A]/70">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between mb-8 pb-3 border-b border-zinc-800/60">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/60 border border-zinc-800/80 text-[11px] font-medium text-zinc-300 backdrop-blur-md">
             <span className="w-2 h-2 rounded-full bg-[#E11D2E] animate-pulse"></span>
-            <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Document Sharing Vault</span>
+            <span className="uppercase tracking-wider font-mono text-[10px] text-zinc-400">Vault Console</span>
+            <span className="text-zinc-600">·</span>
+            <span>Cryptographic Security</span>
           </div>
 
           <button
             type="button"
             onClick={() => setShowConfigModal(true)}
-            className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#18181B] border border-[#27272A] hover:border-[#E11D2E]/50 hover:bg-[#202025] transition-all text-zinc-300 cursor-pointer shadow-sm"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-medium bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-800/50 transition-all text-zinc-300 cursor-pointer shadow-xs backdrop-blur-md"
             title="Click for TiDB Cloud & Backblaze B2 infrastructure status"
           >
             <div className="flex items-center gap-1.5">
               <Database className="w-3.5 h-3.5 text-[#E11D2E]" />
-              <span className="hidden sm:inline">TiDB Cloud:</span>
+              <span className="hidden sm:inline text-zinc-400">TiDB Cloud:</span>
               {dbStatus.isTiDBConnected ? (
                 <span className="text-emerald-400 font-semibold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Connected
@@ -655,11 +669,11 @@ export default function VaultDashboard({ currentUser }) {
               )}
             </div>
 
-            <span className="text-zinc-600">|</span>
+            <span className="text-zinc-700">|</span>
 
             <div className="flex items-center gap-1.5">
               <Cloud className="w-3.5 h-3.5 text-[#E11D2E]" />
-              <span className="hidden sm:inline">Backblaze B2:</span>
+              <span className="hidden sm:inline text-zinc-400">Backblaze B2:</span>
               {storageStatus.isConnected ? (
                 <span className="text-emerald-400 font-semibold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Connected
@@ -670,54 +684,57 @@ export default function VaultDashboard({ currentUser }) {
             </div>
           </button>
         </div>
+
         {/* Hero Section */}
         <div className="text-center max-w-2xl mx-auto mb-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#18181B] border border-[#27272A] text-xs text-zinc-400 mb-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900/80 border border-zinc-800/90 text-xs text-zinc-400 mb-4 shadow-xs">
             <Lock className="w-3.5 h-3.5 text-[#E11D2E]" />
-            <span>Cryptographic Access Codes · Zero Shared Credentials</span>
+            <span className="font-mono text-[11px]">Zero Shared Credentials · Ephemeral Key Exchange</span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight mb-3">
-            Your Documents. <span className="text-[#E11D2E]">Your Control.</span>
+            Your Documents. <span className="bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">Zero Trust.</span> <span className="text-[#E11D2E]">Your Control.</span>
           </h1>
-          <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
-            Attach a file or send secret text, generate a unique access code, and share it securely.
+          <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed max-w-lg mx-auto">
+            Attach confidential files or send secret text. Generate cryptographically hashed access credentials with automated retention.
           </p>
         </div>
 
         {/* Dashboard Grid: Two Main Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 items-start mb-12">
           {/* Card 1: Upload Document */}
-          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-6 sm:p-7 relative flex flex-col justify-between shadow-2xl hover:border-[#3F3F46] transition-all">
+          <div className="bg-[#121215]/90 border border-zinc-800/80 hover:border-zinc-700/80 rounded-2xl p-6 sm:p-7 relative flex flex-col justify-between shadow-xl shadow-black/40 transition-all duration-200 overflow-hidden group">
+            {/* Subtle top hairline highlight */}
+            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#E11D2E]/40 to-transparent"></div>
             <div>
               {/* Card Header */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-red-950/40 border border-[#E11D2E]/30 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[#E11D2E] shadow-inner">
                     {entryMode === 'file' ? (
-                      <UploadCloud className="w-5 h-5 text-[#E11D2E]" />
+                      <UploadCloud className="w-4 h-4 text-[#E11D2E]" />
                     ) : (
-                      <AlignLeft className="w-5 h-5 text-[#E11D2E]" />
+                      <AlignLeft className="w-4 h-4 text-[#E11D2E]" />
                     )}
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-white">
+                    <h2 className="text-base font-bold text-white">
                       {entryMode === 'file' ? 'Upload Document' : 'Send Secret Text'}
                     </h2>
                     <p className="text-xs text-zinc-400">
                       {entryMode === 'file'
-                        ? 'Choose a file and create a secure code.'
-                        : 'Write or paste confidential text and generate a secure code.'}
+                        ? 'Select a document and generate an access credential.'
+                        : 'Write or paste confidential notes and create a secure code.'}
                     </p>
                   </div>
                 </div>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#121215] text-zinc-400 border border-[#27272A]">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900/90 text-zinc-400 border border-zinc-800">
                   Step 1
                 </span>
               </div>
 
               {/* Sign In Required Notice for Unauthenticated Users */}
               {!currentUser && (
-                <div className="mb-4 p-3 rounded-xl bg-red-950/30 border border-[#E11D2E]/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                <div className="mb-4 p-3 rounded-xl bg-red-950/30 border border-red-800/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2 text-zinc-300">
                     <Lock className="w-4 h-4 text-[#E11D2E] shrink-0" />
                     <span>
@@ -735,7 +752,7 @@ export default function VaultDashboard({ currentUser }) {
                     <button
                       type="button"
                       onClick={() => navigate('/login')}
-                      className="px-2 py-1 rounded-md bg-[#27272A] hover:bg-[#3F3F46] text-zinc-300 transition-all cursor-pointer text-[11px]"
+                      className="px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-all cursor-pointer text-[11px]"
                     >
                       Sign In
                     </button>
@@ -743,45 +760,21 @@ export default function VaultDashboard({ currentUser }) {
                 </div>
               )}
 
-              {/* Storage Mode Selector (Temporary, Online Sharing, Long-Term) */}
-              <StorageModeSelector
-                storageMode={storageMode}
-                onChange={(mode) => {
-                  setStorageMode(mode);
-                  if (mode === 'online') {
-                    if (!['30m', '1h', '24h', '7d'].includes(expiryOption)) {
-                      setExpiryOption('24h');
-                    }
-                    if (maxDownloads === 'unlimited' || !maxDownloads) {
-                      setMaxDownloads(5);
-                    }
-                  } else if (mode === 'temporary') {
-                    setExpiryOption('1h');
-                    setMaxDownloads('unlimited');
-                    setDeleteAfterDownload(false);
-                  } else if (mode === 'long_term') {
-                    setExpiryOption('never');
-                    setMaxDownloads('unlimited');
-                    setDeleteAfterDownload(false);
-                  }
-                }}
-              />
-
               {/* Mode Switcher */}
-              <div className="flex items-center p-1 bg-[#121215] rounded-xl border border-[#27272A] mb-4">
+              <div className="flex items-center p-1 bg-zinc-950/60 rounded-xl border border-zinc-800/80 mb-4">
                 <button
                   type="button"
                   onClick={() => {
                     setEntryMode('file');
                     setUploadError('');
                   }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     entryMode === 'file'
-                      ? 'bg-[#18181B] text-white border border-[#E11D2E]/50 shadow-sm'
+                      ? 'bg-zinc-900 text-white border border-zinc-700/80 shadow-xs'
                       : 'text-zinc-400 hover:text-white'
                   }`}
                 >
-                  <Paperclip className={`w-3.5 h-3.5 ${entryMode === 'file' ? 'text-[#E11D2E]' : 'text-zinc-400'}`} />
+                  <Paperclip className={`w-3.5 h-3.5 ${entryMode === 'file' ? 'text-[#E11D2E]' : 'text-zinc-500'}`} />
                   <span>Attach File</span>
                 </button>
                 <button
@@ -790,13 +783,13 @@ export default function VaultDashboard({ currentUser }) {
                     setEntryMode('text');
                     setUploadError('');
                   }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     entryMode === 'text'
-                      ? 'bg-[#18181B] text-white border border-[#E11D2E]/50 shadow-sm'
+                      ? 'bg-zinc-900 text-white border border-zinc-700/80 shadow-xs'
                       : 'text-zinc-400 hover:text-white'
                   }`}
                 >
-                  <AlignLeft className={`w-3.5 h-3.5 ${entryMode === 'text' ? 'text-[#E11D2E]' : 'text-zinc-400'}`} />
+                  <AlignLeft className={`w-3.5 h-3.5 ${entryMode === 'text' ? 'text-[#E11D2E]' : 'text-zinc-500'}`} />
                   <span>Send Text</span>
                 </button>
               </div>
@@ -810,10 +803,10 @@ export default function VaultDashboard({ currentUser }) {
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={handleDrop}
                       onClick={() => fileInputRef.current?.click()}
-                      className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
+                      className={`border border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
                         selectedFiles.length > 0
                           ? 'border-[#E11D2E]/60 bg-red-950/10'
-                          : 'border-[#27272A] hover:border-[#3F3F46] bg-[#121215]/50 hover:bg-[#121215]'
+                          : 'border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-900/40'
                       }`}
                     >
                       <input
@@ -826,8 +819,8 @@ export default function VaultDashboard({ currentUser }) {
 
                       {selectedFiles.length === 0 ? (
                         <div className="space-y-2 py-3">
-                          <div className="w-12 h-12 mx-auto rounded-full bg-[#18181B] border border-[#27272A] flex items-center justify-center">
-                            <UploadCloud className="w-6 h-6 text-zinc-400" />
+                          <div className="w-10 h-10 mx-auto rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                            <UploadCloud className="w-5 h-5 text-zinc-400" />
                           </div>
                           <div>
                             <span className="text-xs font-semibold text-[#E11D2E] hover:underline">
@@ -836,11 +829,11 @@ export default function VaultDashboard({ currentUser }) {
                             <span className="text-xs text-zinc-400"> or drag & drop</span>
                           </div>
                           <p className="text-[11px] text-zinc-500">
-                            Select single or multiple files (PDF, Word, Excel, Images, Audio, Video, etc.)
+                            Single or multiple files (PDF, Word, Excel, Images, Code, etc.)
                           </p>
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#18181B] border border-[#27272A] text-[10px] text-zinc-400">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 font-mono">
                             <Archive className="w-3 h-3 text-amber-400" />
-                            <span>Packaged into unified ZIP · Up to 20 files (1 GB total)</span>
+                            <span>Auto-packaged into ZIP · Up to 20 files</span>
                           </div>
                         </div>
                       ) : (
@@ -938,7 +931,7 @@ export default function VaultDashboard({ currentUser }) {
                             ? `e.g. ${selectedFiles[0].name.replace(/\.[^/.]+$/, '')} (leave blank to keep original file name)`
                             : "e.g. Project_Contracts, Backup_Oct2026... (leave blank for default)"
                         }
-                        className="w-full bg-[#18181B] border border-[#27272A] focus:border-[#E11D2E] rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none transition-all"
+                        className="w-full bg-zinc-950/60 border border-zinc-800 focus:border-[#E11D2E] rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none transition-all"
                       />
                       <p className="text-[10px] text-zinc-500 mt-1">
                         If not mentioned or left blank, the document automatically saves with its original file name.
@@ -947,7 +940,7 @@ export default function VaultDashboard({ currentUser }) {
                   </div>
                 ) : (
                   /* Text Input Area */
-                  <div className="space-y-3 bg-[#121215]/60 p-3.5 rounded-xl border border-[#27272A]">
+                  <div className="space-y-3 bg-zinc-950/40 p-3.5 rounded-xl border border-zinc-800/80">
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="text-[11px] font-medium text-zinc-300 flex items-center gap-1.5">
@@ -962,7 +955,7 @@ export default function VaultDashboard({ currentUser }) {
                         value={textTitle}
                         onChange={(e) => setTextTitle(e.target.value)}
                         placeholder="e.g. Database_Passwords, Secret_Memo, API_Tokens..."
-                        className="w-full bg-[#18181B] border border-[#27272A] focus:border-[#E11D2E] rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none transition-all"
+                        className="w-full bg-zinc-900/60 border border-zinc-800 focus:border-[#E11D2E] rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none transition-all"
                       />
                     </div>
 
@@ -984,7 +977,7 @@ export default function VaultDashboard({ currentUser }) {
                                 }
                               } catch {}
                             }}
-                            className="text-[10px] text-zinc-400 hover:text-white flex items-center gap-1 bg-[#18181B] px-2 py-0.5 rounded border border-[#27272A] hover:border-zinc-500 transition-all cursor-pointer"
+                            className="text-[10px] text-zinc-400 hover:text-white flex items-center gap-1 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800 hover:border-zinc-700 transition-all cursor-pointer"
                           >
                             <Clipboard className="w-3 h-3 text-[#E11D2E]" /> Paste
                           </button>
@@ -1008,7 +1001,7 @@ export default function VaultDashboard({ currentUser }) {
                           setUploadError('');
                         }}
                         placeholder="Type or paste your secret message, confidential notes, passwords, access keys, or code snippets here..."
-                        className="w-full bg-[#0B0B0D] border border-[#27272A] focus:border-[#E11D2E] rounded-xl p-3 text-xs text-zinc-100 font-mono placeholder:text-zinc-600 focus:outline-none transition-all resize-y min-h-[120px]"
+                        className="w-full bg-zinc-950/80 border border-zinc-800 focus:border-[#E11D2E] rounded-xl p-3 text-xs text-zinc-100 font-mono placeholder:text-zinc-600 focus:outline-none transition-all resize-y min-h-[120px]"
                       />
 
                       <div className="flex items-center justify-between mt-1 text-[10px] text-zinc-500">
@@ -1046,57 +1039,121 @@ export default function VaultDashboard({ currentUser }) {
                   </div>
                 )}
 
-                {/* Storage Mode Specific Configuration */}
-                {storageMode === 'online' ? (
-                  <OnlineSharingSettings
-                    expiry={expiryOption}
-                    setExpiry={setExpiryOption}
-                    maxDownloads={maxDownloads}
-                    setMaxDownloads={setMaxDownloads}
-                    deleteAfterDownload={deleteAfterDownload}
-                    setDeleteAfterDownload={setDeleteAfterDownload}
-                  />
-                ) : storageMode === 'long_term' ? (
-                  <div className="space-y-3 p-4 rounded-xl bg-[#121215] border border-amber-900/40 mb-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#27272A]">
-                      <div className="flex items-center gap-2">
-                        <HardDrive className="w-4 h-4 text-amber-400" />
-                        <span className="text-xs font-bold text-white uppercase tracking-wider">
-                          Long-Term Vault Storage
+                {/* Minimalist Modern Storage & Security Accordion */}
+                <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 overflow-hidden transition-all duration-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowSettingsAccordion((prev) => !prev)}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-zinc-900/50 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[#E11D2E] shrink-0 group-hover:border-[#E11D2E]/40 transition-colors">
+                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold text-white block">
+                          Storage Architecture & Expiry Rules
+                        </span>
+                        <span className="text-[11px] text-zinc-400 block truncate">
+                          {storageMode === 'online'
+                            ? `Online Sharing · ${expiryOption} expiry · ${maxDownloads === 'unlimited' ? '∞' : maxDownloads} downloads${deleteAfterDownload ? ' · Burn on read' : ''}`
+                            : storageMode === 'temporary'
+                            ? `Temporary Auto-Purge (${expiryOption})`
+                            : 'Long-Term Storage · Permanent retention'}
                         </span>
                       </div>
-                      <span className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-700/40 px-2 py-0.5 rounded-full font-medium">
-                        Owner Protected
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300">
+                        {storageMode === 'online' ? 'Online' : storageMode === 'temporary' ? 'Temp' : 'Long-Term'}
                       </span>
+                      {showSettingsAccordion ? (
+                        <ChevronUp className="w-4 h-4 text-zinc-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-zinc-400" />
+                      )}
                     </div>
-                    <p className="text-xs text-zinc-300 leading-relaxed">
-                      Files in Long-Term Storage remain securely preserved in Backblaze B2 until explicitly deleted by you.
-                    </p>
-                    <div className="flex items-center justify-between bg-[#18181B] p-2.5 rounded-lg border border-[#27272A] text-xs">
-                      <span className="text-zinc-400">Retention Policy:</span>
-                      <span className="text-emerald-400 font-semibold">Permanent (Until Owner Deletes)</span>
+                  </button>
+
+                  {showSettingsAccordion && (
+                    <div className="p-4 border-t border-zinc-800/80 bg-[#121215]/80 space-y-4 animate-in fade-in duration-200">
+                      <StorageModeSelector
+                        storageMode={storageMode}
+                        onChange={(mode) => {
+                          setStorageMode(mode);
+                          if (mode === 'online') {
+                            if (!['30m', '1h', '24h', '7d'].includes(expiryOption)) {
+                              setExpiryOption('24h');
+                            }
+                            if (maxDownloads === 'unlimited' || !maxDownloads) {
+                              setMaxDownloads(5);
+                            }
+                          } else if (mode === 'temporary') {
+                            setExpiryOption('1h');
+                            setMaxDownloads('unlimited');
+                            setDeleteAfterDownload(false);
+                          } else if (mode === 'long_term') {
+                            setExpiryOption('never');
+                            setMaxDownloads('unlimited');
+                            setDeleteAfterDownload(false);
+                          }
+                        }}
+                      />
+
+                      {storageMode === 'online' ? (
+                        <OnlineSharingSettings
+                          expiry={expiryOption}
+                          setExpiry={setExpiryOption}
+                          maxDownloads={maxDownloads}
+                          setMaxDownloads={setMaxDownloads}
+                          deleteAfterDownload={deleteAfterDownload}
+                          setDeleteAfterDownload={setDeleteAfterDownload}
+                        />
+                      ) : storageMode === 'long_term' ? (
+                        <div className="space-y-3 p-3.5 rounded-xl bg-zinc-900/60 border border-amber-900/40">
+                          <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                            <div className="flex items-center gap-2">
+                              <HardDrive className="w-4 h-4 text-amber-400" />
+                              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                Long-Term Vault Storage
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-700/40 px-2 py-0.5 rounded-full font-medium">
+                              Owner Protected
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-300 leading-relaxed">
+                            Files in Long-Term Storage remain securely preserved in Backblaze B2 until explicitly deleted by you.
+                          </p>
+                          <div className="flex items-center justify-between bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800 text-xs">
+                            <span className="text-zinc-400">Retention Policy:</span>
+                            <span className="text-emerald-400 font-semibold">Permanent (Until Owner Deletes)</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <TemporaryStorageSettings
+                          expiry={expiryOption}
+                          setExpiry={setExpiryOption}
+                          maxDownloads={maxDownloads}
+                          setMaxDownloads={setMaxDownloads}
+                          deleteAfterDownload={deleteAfterDownload}
+                          setDeleteAfterDownload={setDeleteAfterDownload}
+                          customMode={customMode}
+                          setCustomMode={setCustomMode}
+                          customDurationValue={customDurationValue}
+                          setCustomDurationValue={setCustomDurationValue}
+                          customDurationUnit={customDurationUnit}
+                          setCustomDurationUnit={setCustomDurationUnit}
+                          customDateTime={customDateTime}
+                          setCustomDateTime={setCustomDateTime}
+                          getDefaultDateTime={getDefaultDateTime}
+                          getMinDateTime={getMinDateTime}
+                        />
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <TemporaryStorageSettings
-                    expiry={expiryOption}
-                    setExpiry={setExpiryOption}
-                    maxDownloads={maxDownloads}
-                    setMaxDownloads={setMaxDownloads}
-                    deleteAfterDownload={deleteAfterDownload}
-                    setDeleteAfterDownload={setDeleteAfterDownload}
-                    customMode={customMode}
-                    setCustomMode={setCustomMode}
-                    customDurationValue={customDurationValue}
-                    setCustomDurationValue={setCustomDurationValue}
-                    customDurationUnit={customDurationUnit}
-                    setCustomDurationUnit={setCustomDurationUnit}
-                    customDateTime={customDateTime}
-                    setCustomDateTime={setCustomDateTime}
-                    getDefaultDateTime={getDefaultDateTime}
-                    getMinDateTime={getMinDateTime}
-                  />
-                )}
+                  )}
+                </div>
 
                 {/* Progress bar */}
                 {isUploading && (
@@ -1266,23 +1323,44 @@ export default function VaultDashboard({ currentUser }) {
           </div>
 
           {/* Card 2: Access Document */}
-          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-6 sm:p-7 relative flex flex-col justify-between shadow-2xl hover:border-[#3F3F46] transition-all">
+          <div className="bg-[#121215]/90 border border-zinc-800/80 hover:border-zinc-700/80 rounded-2xl p-6 sm:p-7 relative flex flex-col justify-between shadow-xl shadow-black/40 transition-all duration-200 overflow-hidden group">
+            {/* Subtle top hairline highlight */}
+            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent"></div>
             <div>
               {/* Card Header */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-red-950/40 border border-[#E11D2E]/30 flex items-center justify-center">
-                    <KeyRound className="w-5 h-5 text-[#E11D2E]" />
+                  <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-cyan-400 shadow-inner">
+                    <KeyRound className="w-4 h-4 text-cyan-400" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-white">Access Document</h2>
+                    <h2 className="text-base font-bold text-white">Access Document</h2>
                     <p className="text-xs text-zinc-400">Enter a code received from the uploader.</p>
                   </div>
                 </div>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#121215] text-zinc-400 border border-[#27272A]">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900/90 text-zinc-400 border border-zinc-800">
                   Step 2
                 </span>
               </div>
+
+              {/* Recent Upload Quick Test Helper */}
+              {uploadResult?.code && !accessCodeInput && (
+                <div className="mb-4 p-2.5 rounded-xl bg-zinc-900/80 border border-zinc-800 flex items-center justify-between text-xs animate-in fade-in">
+                  <span className="text-zinc-400">
+                    Recent code: <strong className="font-mono text-white">{uploadResult.code}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccessCodeInput(uploadResult.code);
+                      setAccessError('');
+                    }}
+                    className="px-2 py-0.5 rounded bg-[#E11D2E]/20 hover:bg-[#E11D2E]/40 text-[#E11D2E] text-[11px] font-semibold transition-all cursor-pointer"
+                  >
+                    Fill & Test &rarr;
+                  </button>
+                </div>
+              )}
 
               {/* Access Form */}
               <form onSubmit={handleAccessSubmit} className="space-y-4">
@@ -1299,7 +1377,7 @@ export default function VaultDashboard({ currentUser }) {
                         setAccessError('');
                       }}
                       placeholder="Enter access code... (e.g. A1B95@3he5)"
-                      className="w-full bg-[#121215] border border-[#27272A] rounded-xl px-4 py-3 text-sm text-white font-mono-code placeholder:text-zinc-600 focus:outline-none focus:border-[#E11D2E] focus:ring-1 focus:ring-[#E11D2E] transition-all pr-20"
+                      className="w-full bg-zinc-950/60 border border-zinc-800 focus:border-[#E11D2E] rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none transition-all pr-20"
                     />
                     <button
                       type="button"
@@ -1311,7 +1389,7 @@ export default function VaultDashboard({ currentUser }) {
                           // clipboard permission denied
                         }
                       }}
-                      className="absolute right-2 top-2 px-2.5 py-1 text-xs font-mono text-zinc-400 hover:text-white bg-[#18181B] border border-[#27272A] rounded-lg transition-all"
+                      className="absolute right-2 top-2 px-2.5 py-1 text-xs font-mono text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all"
                     >
                       Paste
                     </button>
@@ -1322,7 +1400,7 @@ export default function VaultDashboard({ currentUser }) {
                 </div>
 
                 {/* Rate limit note */}
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-[#121215] border border-[#27272A] text-xs text-zinc-400">
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-zinc-950/40 border border-zinc-800/80 text-xs text-zinc-400">
                   <Shield className="w-3.5 h-3.5 text-[#E11D2E] shrink-0" />
                   <span>Enforced rate limits & SHA-256 hash lookup against brute-force.</span>
                 </div>
@@ -1339,7 +1417,7 @@ export default function VaultDashboard({ currentUser }) {
                 <button
                   type="submit"
                   disabled={!accessCodeInput || isVerifying}
-                  className="w-full py-3 px-4 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-950/30 hover:shadow-red-900/50 active:scale-[0.99]"
+                  className="w-full py-3 px-4 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-950/30 hover:shadow-red-900/50 active:scale-[0.99] cursor-pointer"
                 >
                   {isVerifying ? (
                     <>
@@ -1480,6 +1558,17 @@ export default function VaultDashboard({ currentUser }) {
                       <ExternalLink className="w-3.5 h-3.5 text-[#E11D2E]" /> View in Browser
                     </a>
                   </div>
+
+                  {/* DocQevrilo AI Study Assistant Button */}
+                  <button
+                    type="button"
+                    onClick={() => setAiModalDoc(unlockedDoc)}
+                    className="w-full mt-2.5 py-2 px-3 rounded-xl bg-gradient-to-r from-red-950 via-[#18181B] to-red-950/70 hover:from-red-900 hover:to-zinc-800 border border-[#E11D2E]/50 hover:border-[#E11D2E] text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-red-950/40 group"
+                    title="Ask AI questions, summarize, or take a quiz on this document"
+                  >
+                    <Sparkles className="w-4 h-4 text-[#E11D2E] group-hover:rotate-12 transition-transform" />
+                    <span>✨ Open DocQevrilo AI Study Assistant</span>
+                  </button>
 
                   {/* Optional Quick In-Page Preview Toggle */}
                   <div className="mt-2.5">
@@ -1833,6 +1922,16 @@ export default function VaultDashboard({ currentUser }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* DocQevrilo AI Study Assistant Modal */}
+      {aiModalDoc && (
+        <AiDocumentModal
+          isOpen={Boolean(aiModalDoc)}
+          onClose={() => setAiModalDoc(null)}
+          doc={aiModalDoc}
+          accessCode={aiModalDoc.enteredCode || accessCodeInput.trim() || ''}
+        />
       )}
     </div>
   );

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, Shield, ArrowRight, FolderLock } from 'lucide-react';
+import { Menu, X, Shield, ArrowRight, FolderLock, User } from 'lucide-react';
 import Logo from './Logo';
+import UserProfileModal from './UserProfileModal';
 
-export default function Navbar({ isAuthenticated = false, onLogout }) {
+export default function Navbar({ isAuthenticated = false, currentUser = null, onLogout, onProfileUpdated }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
 
   const handleLinkClick = () => {
@@ -54,18 +56,77 @@ export default function Navbar({ isAuthenticated = false, onLogout }) {
               </li>
             </>
           ) : (
-            <li>
-              <button
-                onClick={() => {
-                  if (onLogout) onLogout();
-                  navigate('/login');
-                }}
-                className="sv-btn-secondary"
-                style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
-              >
-                Sign Out
-              </button>
-            </li>
+            <>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setIsProfileOpen(true)}
+                  className="sv-profile-pill-btn"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '9999px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    color: '#f4f4f5',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="View and update profile"
+                >
+                  <span
+                    style={{
+                      width: '22px',
+                      height: '22px',
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #e11d2e, #991b1b)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      color: '#ffffff',
+                    }}
+                  >
+                    {(currentUser?.name || currentUser?.full_name || 'U')[0]?.toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: '0.84rem', fontWeight: '500' }}>
+                    {currentUser?.name || currentUser?.full_name || 'Profile'}
+                  </span>
+                  {currentUser?.occupation && (
+                    <span
+                      style={{
+                        fontSize: '0.7rem',
+                        color: '#a1a1aa',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        maxWidth: '120px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {currentUser.occupation}
+                    </span>
+                  )}
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
+                    if (onLogout) onLogout();
+                    navigate('/login');
+                  }}
+                  className="sv-btn-secondary"
+                  style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
+                >
+                  Sign Out
+                </button>
+              </li>
+            </>
           )}
         </ul>
 
@@ -116,18 +177,39 @@ export default function Navbar({ isAuthenticated = false, onLogout }) {
             </NavLink>
           </>
         ) : (
-          <button
-            onClick={() => {
-              setMobileMenuOpen(false);
-              if (onLogout) onLogout();
-              navigate('/login');
-            }}
-            className="sv-btn-secondary"
-          >
-            Sign Out
-          </button>
+          <>
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setIsProfileOpen(true);
+              }}
+              className="sv-nav-link"
+              style={{ textAlign: 'left', width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <User size={16} />
+              <span>Profile & Security ({currentUser?.name || 'Account'})</span>
+            </button>
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                if (onLogout) onLogout();
+                navigate('/login');
+              }}
+              className="sv-btn-secondary"
+            >
+              Sign Out
+            </button>
+          </>
         )}
       </div>
+
+      {/* Profile & Security Settings Modal */}
+      <UserProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        currentUser={currentUser}
+        onProfileUpdated={onProfileUpdated}
+      />
     </header>
   );
 }
