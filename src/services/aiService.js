@@ -50,7 +50,7 @@ export const aiService = {
    * @param {number|string} docId - Document ID
    * @param {Object} options - { mode: 'detailed'|'quick'|'exam', access_code?: string }
    */
-  async getDocumentSummary(docId, { mode = 'detailed', accessCode } = {}) {
+  async getDocumentSummary(docId, { mode = 'detailed', accessCode, refresh = false } = {}) {
     const headers = {
       'Content-Type': 'application/json',
       ...authService.getAuthHeaders(),
@@ -59,11 +59,15 @@ export const aiService = {
       headers['X-Access-Code'] = accessCode;
     }
 
-    const queryParam = accessCode ? `?code=${encodeURIComponent(accessCode)}` : '';
+    const queryParts = [];
+    if (accessCode) queryParts.push(`code=${encodeURIComponent(accessCode)}`);
+    if (refresh) queryParts.push('refresh=true');
+    const queryParam = queryParts.length ? `?${queryParts.join('&')}` : '';
+
     const response = await fetch(`${API_BASE_URL}/ai/documents/${docId}/summary${queryParam}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ mode, access_code: accessCode }),
+      body: JSON.stringify({ mode, access_code: accessCode, refresh }),
     });
 
     const data = await response.json();

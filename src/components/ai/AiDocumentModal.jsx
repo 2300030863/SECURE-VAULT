@@ -82,13 +82,14 @@ export default function AiDocumentModal({ isOpen, onClose, doc, accessCode = '' 
   if (!isOpen || !doc) return null;
 
   // 1. Summarizer Handlers
-  const handleFetchSummary = async (mode = summaryMode) => {
+  const handleFetchSummary = async (mode = summaryMode, refresh = false) => {
     setIsLoadingSummary(true);
     setSummaryError('');
     try {
       const res = await aiService.getDocumentSummary(doc.id, {
         mode,
         accessCode: accessCode || doc.access_code || doc.enteredCode,
+        refresh,
       });
       setSummaryData(res.summary);
     } catch (err) {
@@ -388,7 +389,7 @@ export default function AiDocumentModal({ isOpen, onClose, doc, accessCode = '' 
 
                   <button
                     type="button"
-                    onClick={() => handleFetchSummary(summaryMode)}
+                    onClick={() => handleFetchSummary(summaryMode, true)}
                     disabled={isLoadingSummary}
                     className="flex items-center gap-1 px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs transition-colors cursor-pointer"
                   >
