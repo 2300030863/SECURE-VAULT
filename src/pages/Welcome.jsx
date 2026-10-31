@@ -20,71 +20,95 @@ import {
 export default function Welcome() {
   const videoRef = useRef(null);
 
+  // Synchronous DOM attachment via callback ref to guarantee muted autoplay before first paint
+  const handleVideoRef = (element) => {
+    videoRef.current = element;
+    if (element) {
+      element.muted = true;
+      element.defaultMuted = true;
+      element.volume = 0;
+      element.playsInline = true;
+      element.setAttribute('muted', '');
+      element.setAttribute('playsinline', '');
+      element.setAttribute('webkit-playsinline', 'true');
+      element.setAttribute('x5-playsinline', 'true');
+    }
+  };
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    // Strict muted enforcement so sound is 100% silent and never blocked
-    video.muted = true;
-    video.defaultMuted = true;
-    video.volume = 0;
-    video.playsInline = true;
+    let isMounted = true;
 
-    const playVideo = () => {
+    const startPlayback = () => {
+      if (!video || !isMounted) return;
       const playPromise = video.play();
       if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          // If browser deferred autoplay until first interaction, start on touch/click/scroll
-          const resumeOnAction = () => {
-            if (video && video.paused) {
+        playPromise.catch(() => {
+          // If mobile browser policy deferred playback, start on first finger touch or scroll
+          const unlock = () => {
+            if (video && isMounted && video.paused) {
               video.play().catch(() => {});
             }
           };
-          window.addEventListener('click', resumeOnAction, { once: true, passive: true });
-          window.addEventListener('touchstart', resumeOnAction, { once: true, passive: true });
-          window.addEventListener('scroll', resumeOnAction, { once: true, passive: true });
+
+          window.addEventListener('touchstart', unlock, { once: true, passive: true });
+          window.addEventListener('touchend', unlock, { once: true, passive: true });
+          window.addEventListener('click', unlock, { once: true, passive: true });
+          window.addEventListener('scroll', unlock, { once: true, passive: true });
         });
       }
     };
 
-    if (video.readyState >= 2) {
-      playVideo();
-    } else {
-      video.addEventListener('canplay', playVideo, { once: true });
-    }
+    // Attempt playback immediately
+    startPlayback();
 
-    // Replay cleanly if user switches back to this tab
+    // Listen for buffering events
+    video.addEventListener('canplay', startPlayback);
+    video.addEventListener('loadeddata', startPlayback);
+
+    // Replay cleanly if user switches back to this tab/app on phone
     const handleVisibility = () => {
-      if (!document.hidden && video.paused) {
-        playVideo();
+      if (!document.hidden && video && video.paused && isMounted) {
+        startPlayback();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+
     return () => {
+      isMounted = false;
+      video.removeEventListener('canplay', startPlayback);
+      video.removeEventListener('loadeddata', startPlayback);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
     };
   }, []);
 
   return (
     <div className="sv-welcome-v2 sv-page-wrapper">
-      {/* --- AMBIENT BACKGROUND VIDEO (MUTED, AUTOPLAY, ZERO-ERROR) --- */}
+      {/* --- AMBIENT BACKGROUND VIDEO (MUTED, AUTOPLAY, ZERO-ERROR, MOBILE-PERFECT) --- */}
       <div className="sv-welcome-video-container" aria-hidden="true">
         <video
-          ref={videoRef}
+          ref={handleVideoRef}
           className="sv-welcome-bg-video"
           src="/gemini_generated_video_38e6201d.mp4"
           autoPlay
           loop
           muted
           playsInline
+          webkit-playsinline="true"
+          x5-playsinline="true"
+          x5-video-player-type="h5"
+          x5-video-player-fullscreen="true"
           preload="auto"
           disablePictureInPicture
           disableRemotePlayback
+          controls={false}
           tabIndex={-1}
-        >
-          <source src="/gemini_generated_video_38e6201d.mp4" type="video/mp4" />
-        </video>
+        />
         <div className="sv-welcome-video-overlay" />
       </div>
 
