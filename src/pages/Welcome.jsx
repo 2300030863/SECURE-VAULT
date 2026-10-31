@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Shield,
@@ -18,14 +18,82 @@ import {
 } from 'lucide-react';
 
 export default function Welcome() {
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Strict muted enforcement so sound is 100% silent and never blocked
+    video.muted = true;
+    video.defaultMuted = true;
+    video.volume = 0;
+    video.playsInline = true;
+
+    const playVideo = () => {
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          // If browser deferred autoplay until first interaction, start on touch/click/scroll
+          const resumeOnAction = () => {
+            if (video && video.paused) {
+              video.play().catch(() => {});
+            }
+          };
+          window.addEventListener('click', resumeOnAction, { once: true, passive: true });
+          window.addEventListener('touchstart', resumeOnAction, { once: true, passive: true });
+          window.addEventListener('scroll', resumeOnAction, { once: true, passive: true });
+        });
+      }
+    };
+
+    if (video.readyState >= 2) {
+      playVideo();
+    } else {
+      video.addEventListener('canplay', playVideo, { once: true });
+    }
+
+    // Replay cleanly if user switches back to this tab
+    const handleVisibility = () => {
+      if (!document.hidden && video.paused) {
+        playVideo();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
   return (
     <div className="sv-welcome-v2 sv-page-wrapper">
+      {/* --- AMBIENT BACKGROUND VIDEO (MUTED, AUTOPLAY, ZERO-ERROR) --- */}
+      <div className="sv-welcome-video-container" aria-hidden="true">
+        <video
+          ref={videoRef}
+          className="sv-welcome-bg-video"
+          src="/gemini_generated_video_38e6201d.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          disablePictureInPicture
+          disableRemotePlayback
+          tabIndex={-1}
+        >
+          <source src="/gemini_generated_video_38e6201d.mp4" type="video/mp4" />
+        </video>
+        <div className="sv-welcome-video-overlay" />
+      </div>
+
       {/* --- HERO SECTION --- */}
       <section className="sv-hero-section sv-hero-v2" aria-labelledby="hero-heading">
         <div className="sv-hero-content">
           <div className="sv-eyebrow">
             <span className="sv-live-dot" />
-            <span>DocQevrilo Platform · One Code. Simple Sharing.</span>
+            <span>DocQevrilo Platform · Secure sharing, made simple</span>
           </div>
 
           <button

@@ -6,6 +6,7 @@ import './styles/global.css';
 import './styles/components.css';
 import './styles/auth.css';
 import './styles/welcome.css';
+import './styles/dashboard.css';
 
 // Import Shared Components
 import Navbar from './components/Navbar';

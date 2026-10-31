@@ -635,7 +635,7 @@ export default function VaultDashboard({ currentUser }) {
   };
 
   return (
-    <div className="w-full flex-1 flex flex-col items-center bg-[#09090B] text-[#ECECF1] font-sans selection:bg-[#E11D2E] selection:text-white relative overflow-hidden">
+    <div className="sv-dashboard-page w-full flex-1 flex flex-col items-center bg-[#09090B] text-[#ECECF1] font-sans selection:bg-[#E11D2E] selection:text-white relative overflow-hidden">
       {/* Subtle Minimalist Atmospheric Background Glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[360px] bg-gradient-to-b from-red-600/[0.08] via-red-950/[0.03] to-transparent blur-3xl pointer-events-none -z-10" />
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:28px_28px] pointer-events-none -z-10" />

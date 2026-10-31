@@ -14,27 +14,106 @@ let authToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_t
 export const authService = {
   /**
    * Register a new user in TiDB Cloud
-   * @param {Object} payload { fullName, email, password, occupation, securityPin }
+   * @param {Object} payload { fullName, email, password, occupation, securityPin, verificationProof }
    */
-  async register({ fullName, email, password, occupation, securityPin }) {
+  async register({ fullName, email, password, occupation, securityPin, verificationProof }) {
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ fullName, email, password, occupation, securityPin }),
+      body: JSON.stringify({ fullName, email, password, occupation, securityPin, verificationProof }),
     });
 
     const data = await response.json();
     if (!response.ok) {
-      throw new Error(data.error || 'Registration failed');
+      const error = new Error(data.error || 'Registration failed');
+      error.requiresEmailVerification = data.requiresEmailVerification || false;
+      error.requiresInlineEmailVerification = data.requiresInlineEmailVerification || false;
+      error.email = data.email || email;
+      error.devOtp = data.devOtp;
+      throw error;
+    }
+
+    if (data.token) {
+      authToken = data.token;
+      sessionStorage.setItem('sv_token', data.token);
     }
 
     return {
       success: true,
       message: data.message || 'Account created successfully!',
+      requiresEmailVerification: data.requiresEmailVerification,
+      email: data.email || email,
+      token: data.token,
+      warning: data.warning,
+      devOtp: data.devOtp,
       user: data.user,
     };
+  },
+
+  /**
+   * Send inline registration email verification OTP code
+   */
+  async sendEmailOtp(email) {
+    const response = await fetch(`${API_BASE_URL}/auth/send-email-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const err = new Error(data.error || 'Failed to send verification code.');
+      err.locked = Boolean(data.locked);
+      err.minutesRemaining = data.minutesRemaining;
+      err.attemptsRemaining = data.attemptsRemaining;
+      throw err;
+    }
+    return data;
+  },
+
+  /**
+   * Verify inline registration email OTP code and obtain verificationProof
+   */
+  async verifyEmailOtp(email, otp) {
+    const response = await fetch(`${API_BASE_URL}/auth/verify-email-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Invalid or expired verification code.');
+    }
+    return data;
+  },
+
+  /**
+   * Verify an unverified user's email with a 6-digit OTP code
+   */
+  async verifyEmail(email, otp) {
+    const response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Email verification failed.');
+    return data;
+  },
+
+  /**
+   * Resend a fresh 6-digit OTP verification code to user's email
+   */
+  async resendVerificationEmail(email) {
+    const response = await fetch(`${API_BASE_URL}/auth/resend-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to resend verification code.');
+    return data;
   },
 
   /**
@@ -52,7 +131,10 @@ export const authService = {
 
     const data = await response.json();
     if (!response.ok) {
-      throw new Error(data.error || 'Invalid email or password');
+      const error = new Error(data.error || 'Invalid email or password');
+      error.requiresEmailVerification = data.requiresEmailVerification || false;
+      error.email = data.email || email;
+      throw error;
     }
 
     // Store JWT token safely
@@ -140,7 +222,11 @@ export const authService = {
 
     const data = await response.json();
     if (!response.ok) {
-      throw new Error(data.message || 'Request failed.');
+      const err = new Error(data.message || 'Request failed.');
+      err.locked = Boolean(data.locked);
+      err.minutesRemaining = data.minutesRemaining;
+      err.attemptsRemaining = data.attemptsRemaining;
+      throw err;
     }
 
     return {
@@ -186,14 +272,14 @@ export const authService = {
   /**
    * Update user profile details & 4-digit Security PIN
    */
-  async updateProfile({ fullName, occupation, newPin, currentPassword }) {
+  async updateProfile({ fullName, occupation, newPin, currentPin, currentPassword, pinRecoveryOtp }) {
     const response = await fetch(`${API_BASE_URL}/auth/profile`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         ...this.getAuthHeaders(),
       },
-      body: JSON.stringify({ fullName, occupation, newPin, currentPassword }),
+      body: JSON.stringify({ fullName, occupation, newPin, currentPin, currentPassword, pinRecoveryOtp }),
     });
 
     const data = await response.json();
@@ -202,6 +288,35 @@ export const authService = {
     }
 
     return data;
+  },
+
+  async requestPinRecoveryOtp() {
+    const response = await fetch(`${API_BASE_URL}/auth/request-pin-recovery`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const err = new Error(data.error || 'Unable to send PIN recovery code.');
+      err.locked = Boolean(data.locked);
+      err.minutesRemaining = data.minutesRemaining;
+      err.attemptsRemaining = data.attemptsRemaining;
+      throw err;
+    }
+    return data;
+  },
+
+  async getPinRecoveryStatus() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/pin-recovery-status`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (_) {}
+    return { locked: false, attemptsRemaining: 3 };
   },
 
   /**

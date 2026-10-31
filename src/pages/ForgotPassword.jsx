@@ -10,6 +10,8 @@ export default function ForgotPassword() {
   const [statusMessage, setStatusMessage] = useState(null); // { type, message }
   const [loading, setLoading] = useState(false);
   const [resultData, setResultData] = useState(null);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockoutMinutes, setLockoutMinutes] = useState(20);
   const navigate = useNavigate();
 
   async function handleSubmit(event) {
@@ -26,6 +28,14 @@ export default function ForgotPassword() {
       return;
     }
 
+    if (isLocked) {
+      setStatusMessage({
+        type: 'error',
+        message: `Too many OTP requests. Password reset is on hold for ${lockoutMinutes} minutes. Please try again later.`,
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -38,10 +48,21 @@ export default function ForgotPassword() {
           'If an account exists for that email, a verification link & OTP code will be sent.',
       });
     } catch (err) {
-      setStatusMessage({
-        type: 'error',
-        message: err.message || 'Unable to connect to the server. Please try again.',
-      });
+      if (err.locked) {
+        setIsLocked(true);
+        setLockoutMinutes(err.minutesRemaining || 20);
+        setStatusMessage({
+          type: 'error',
+          message:
+            err.message ||
+            `Too many OTP requests (3 limit). Please try again in ${err.minutesRemaining || 20} minutes.`,
+        });
+      } else {
+        setStatusMessage({
+          type: 'error',
+          message: err.message || 'Unable to connect to the server. Please try again.',
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -140,7 +161,7 @@ export default function ForgotPassword() {
               <button
                 type="submit"
                 className="sv-btn-primary"
-                disabled={loading}
+                disabled={loading || isLocked}
                 aria-busy={loading}
               >
                 {loading ? (
@@ -148,6 +169,8 @@ export default function ForgotPassword() {
                     <div className="sv-spinner" aria-hidden="true" />
                     <span>Sending OTP to Email...</span>
                   </>
+                ) : isLocked ? (
+                  <span>Locked ({lockoutMinutes}m Hold)</span>
                 ) : (
                   <>
                     <span>Send 6-Digit OTP to Email</span>

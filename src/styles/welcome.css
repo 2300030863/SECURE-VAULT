@@ -18,6 +18,73 @@
 }
 
 /* ==========================================================
+   AMBIENT BACKGROUND VIDEO (PROPER FULLSCREEN VIEWPORT)
+   ========================================================== */
+.sv-welcome-video-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  background-color: #080808;
+}
+
+.sv-welcome-bg-video {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100vw;
+  height: 100vh;
+  min-width: 100%;
+  min-height: 100%;
+  transform: translate(-50%, -50%);
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.72;
+  filter: brightness(0.9) contrast(1.08) saturate(1.15);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity 0.6s ease;
+}
+
+.sv-welcome-video-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 55% at 50% 20%, rgba(229, 9, 42, 0.06) 0%, transparent 65%),
+    linear-gradient(180deg, rgba(8, 8, 8, 0.35) 0%, rgba(8, 8, 8, 0.50) 40%, rgba(8, 8, 8, 0.75) 85%, #080808 100%);
+  pointer-events: none;
+}
+
+/* Ensure all interactive sections remain clearly elevated above the ambient video */
+.sv-welcome-v2 {
+  position: relative;
+  z-index: 1;
+}
+
+.sv-welcome-v2 .sv-hero-v2,
+.sv-welcome-v2 .sv-features-v2,
+.sv-welcome-v2 .sv-workflow-v2,
+.sv-welcome-v2 .sv-architecture-v2,
+.sv-welcome-v2 .sv-final-cta {
+  position: relative;
+  z-index: 2;
+}
+
+/* Respect user's prefers-reduced-motion setting */
+@media (prefers-reduced-motion: reduce) {
+  .sv-welcome-bg-video {
+    display: none;
+  }
+}
+
+/* ==========================================================
    HERO SECTION
    ========================================================== */
 .sv-welcome-v2 .sv-hero-v2 {
@@ -33,6 +100,18 @@
   padding-left: clamp(1rem, 4vw, 1.5rem);
   padding-right: clamp(1rem, 4vw, 1.5rem);
   box-sizing: border-box;
+}
+
+.sv-welcome-v2 .sv-hero-v2::before {
+  content: '';
+  position: absolute;
+  inset: 1.5rem 1rem auto;
+  height: 34rem;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 2rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.025), transparent 46%);
+  pointer-events: none;
+  z-index: -1;
 }
 
 .sv-welcome-v2 .sv-hero-content {
@@ -80,6 +159,10 @@
   margin-bottom: 1.25rem;
   word-break: break-word;
   overflow-wrap: break-word;
+}
+
+.sv-welcome-v2 .sv-hero-headline .highlight {
+  text-shadow: 0 0 32px rgba(229, 9, 42, 0.22);
 }
 
 .sv-welcome-v2 .sv-hero-headline .highlight {

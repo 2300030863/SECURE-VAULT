@@ -92,6 +92,8 @@ export default function Login({ onLoginSuccess }) {
       setStatusMessage({
         type: 'error',
         message: err.message || 'Unable to sign in. Please check your credentials.',
+        requiresEmailVerification: Boolean(err.requiresEmailVerification),
+        email: err.email || formData.email.trim().toLowerCase(),
       });
     } finally {
       setIsSubmitting(false);
@@ -134,6 +136,27 @@ export default function Login({ onLoginSuccess }) {
 
           {/* Status Feedback Live Region */}
           <FormMessage type={statusMessage?.type} message={statusMessage?.message} />
+
+          {statusMessage?.requiresEmailVerification && (
+            <div style={{ margin: '1rem 0', textAlign: 'center' }}>
+              <Link
+                to={`/register?verify=${encodeURIComponent(statusMessage.email || formData.email)}`}
+                className="sv-btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  width: '100%',
+                  padding: '0.65rem 1rem',
+                  fontSize: '0.85rem',
+                  textDecoration: 'none',
+                }}
+              >
+                Enter Verification Code or Resend
+              </Link>
+            </div>
+          )}
 
           {/* Form */}
           <form className="sv-form" onSubmit={handleSubmit} noValidate>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { User, Mail, Briefcase, KeyRound, Check, X, Shield, AlertCircle, RefreshCw } from 'lucide-react';
+import { User, Mail, Briefcase, KeyRound, Check, X, Shield, AlertCircle, RefreshCw, Lock, Send } from 'lucide-react';
 import { authService } from '../services/authService';
 
 export default function UserProfileModal({ isOpen, onClose, currentUser, onProfileUpdated }) {
@@ -8,13 +8,21 @@ export default function UserProfileModal({ isOpen, onClose, currentUser, onProfi
   const [formData, setFormData] = useState({
     fullName: currentUser?.name || currentUser?.full_name || '',
     occupation: currentUser?.occupation || 'Student',
+    currentPinOrPassword: '',
     newPin: '',
     confirmPin: '',
+    pinRecoveryOtp: '',
   });
 
+  const [authMethod, setAuthMethod] = useState('credentials'); // 'credentials' | 'otp'
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isRequestingPinRecovery, setIsRequestingPinRecovery] = useState(false);
+  const [pinRecoveryRequested, setPinRecoveryRequested] = useState(false);
+  const [pinRecoveryAttemptsRemaining, setPinRecoveryAttemptsRemaining] = useState(3);
+  const [isPinRecoveryLocked, setIsPinRecoveryLocked] = useState(false);
+  const [pinRecoveryLockoutMinutes, setPinRecoveryLockoutMinutes] = useState(20);
 
   // Keep state synchronized with currentUser prop when modal opens
   useEffect(() => {
@@ -23,11 +31,30 @@ export default function UserProfileModal({ isOpen, onClose, currentUser, onProfi
       setFormData({
         fullName: currentUser?.name || currentUser?.full_name || '',
         occupation: currentUser?.occupation || 'Student',
+        currentPinOrPassword: '',
         newPin: '',
         confirmPin: '',
+        pinRecoveryOtp: '',
       });
       setError('');
       setSuccess('');
+      setPinRecoveryRequested(false);
+      setAuthMethod('credentials');
+
+      // Check OTP rate limit / hold status on modal open
+      authService.getPinRecoveryStatus().then((status) => {
+        if (status) {
+          if (status.locked) {
+            setIsPinRecoveryLocked(true);
+            setPinRecoveryLockoutMinutes(status.minutesRemaining || 20);
+          } else {
+            setIsPinRecoveryLocked(false);
+            if (typeof status.attemptsRemaining === 'number') {
+              setPinRecoveryAttemptsRemaining(status.attemptsRemaining);
+            }
+          }
+        }
+      }).catch(() => {});
     }
   }, [isOpen, currentUser]);
 
@@ -39,32 +66,86 @@ export default function UserProfileModal({ isOpen, onClose, currentUser, onProfi
     setError('');
   };
 
+  const handleRequestPinRecovery = async () => {
+    setError('');
+    setSuccess('');
+
+    if (isPinRecoveryLocked) {
+      setError(`Too many OTP requests. PIN recovery is held for ${pinRecoveryLockoutMinutes} minutes.`);
+      return;
+    }
+
+    setIsRequestingPinRecovery(true);
+    try {
+      const res = await authService.requestPinRecoveryOtp();
+      setPinRecoveryRequested(true);
+      if (typeof res.attemptsRemaining === 'number') {
+        setPinRecoveryAttemptsRemaining(res.attemptsRemaining);
+      }
+      setSuccess(res.message || 'A 6-digit recovery code has been sent to your registered email.');
+    } catch (err) {
+      if (err.locked) {
+        setIsPinRecoveryLocked(true);
+        setPinRecoveryLockoutMinutes(err.minutesRemaining || 20);
+        setError(err.message || `Too many OTP requests (3 limit). Please try again in ${err.minutesRemaining || 20} minutes.`);
+      } else {
+        setError(err.message || 'Unable to send PIN recovery code. Please try again.');
+      }
+    } finally {
+      setIsRequestingPinRecovery(false);
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
-    if (formData.newPin) {
+    const wantsToChangePin = Boolean(formData.newPin || formData.confirmPin);
+
+    if (wantsToChangePin) {
       if (!/^\d{4}$/.test(formData.newPin.trim())) {
-        setError('Security PIN must be exactly 4 digits (0-9).');
-        return;
-      }
-      if (formData.confirmPin && formData.newPin !== formData.confirmPin) {
-        setError('PIN confirmation does not match. Please enter the same 4 digits.');
+        setError('New Security PIN must be exactly 4 digits (0-9).');
         return;
       }
       if (!formData.confirmPin) {
         setError('Please re-enter the 4-digit PIN in the Confirm field.');
         return;
       }
+      if (formData.newPin !== formData.confirmPin) {
+        setError('PIN confirmation does not match. Please enter the same 4 digits.');
+        return;
+      }
+
+      if (hasPinConfigured) {
+        if (authMethod === 'otp') {
+          if (!pinRecoveryRequested) {
+            setError('Please click "Send 6-Digit Code" to receive the verification OTP on your email.');
+            return;
+          }
+          if (!/^\d{6}$/.test(formData.pinRecoveryOtp.trim())) {
+            setError('Enter the complete 6-digit email recovery code to verify this PIN change.');
+            return;
+          }
+        } else {
+          if (!formData.currentPinOrPassword.trim()) {
+            setError('Please enter your current 4-digit PIN or account password to authorize changing your PIN.');
+            return;
+          }
+        }
+      }
     }
 
     setIsSubmitting(true);
     try {
+      const isOtpMode = Boolean(hasPinConfigured && authMethod === 'otp');
       const res = await authService.updateProfile({
         fullName: formData.fullName.trim(),
         occupation: formData.occupation,
-        newPin: formData.newPin ? formData.newPin.trim() : undefined,
+        newPin: wantsToChangePin ? formData.newPin.trim() : undefined,
+        currentPin: !isOtpMode && formData.currentPinOrPassword ? formData.currentPinOrPassword.trim() : undefined,
+        currentPassword: !isOtpMode && formData.currentPinOrPassword ? formData.currentPinOrPassword.trim() : undefined,
+        pinRecoveryOtp: isOtpMode ? formData.pinRecoveryOtp.trim() : undefined,
       });
 
       const updatedUser = res.user;
@@ -73,10 +154,13 @@ export default function UserProfileModal({ isOpen, onClose, currentUser, onProfi
         ...prev,
         fullName: updatedUser.name || updatedUser.full_name || prev.fullName,
         occupation: updatedUser.occupation || prev.occupation,
+        currentPinOrPassword: '',
         newPin: '',
         confirmPin: '',
+        pinRecoveryOtp: '',
       }));
-      setSuccess('Profile & 4-digit Security PIN updated successfully!');
+      setPinRecoveryRequested(false);
+      setSuccess('Profile & security settings updated successfully!');
 
       if (onProfileUpdated) {
         onProfileUpdated(updatedUser);
@@ -220,6 +304,120 @@ export default function UserProfileModal({ isOpen, onClose, currentUser, onProfi
             <p className="text-[11px] text-zinc-400 leading-relaxed">
               This 4-digit number is your secondary authorization code to reveal and regenerate access codes in Your Shared Vaults.
             </p>
+
+            {hasPinConfigured && (
+              <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 space-y-2.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-zinc-300 font-medium">Verify Identity to Change PIN:</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMethod('credentials');
+                        setError('');
+                      }}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                        authMethod === 'credentials'
+                          ? 'bg-[#E11D2E] text-white'
+                          : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      PIN / Password
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMethod('otp');
+                        setError('');
+                      }}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                        authMethod === 'otp'
+                          ? 'bg-[#E11D2E] text-white'
+                          : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Verify via Email
+                    </button>
+                  </div>
+                </div>
+
+                {authMethod === 'credentials' ? (
+                  <div className="space-y-1.5 pt-1">
+                    <label className="block text-zinc-400 text-[10px] font-medium">
+                      Enter Current PIN or Account Password <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      name="currentPinOrPassword"
+                      value={formData.currentPinOrPassword}
+                      onChange={handleChange}
+                      placeholder="Current 4-digit PIN or account password"
+                      className="w-full bg-[#18181B] border border-[#27272A] rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-[#E11D2E]"
+                      autoComplete="current-password"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-zinc-400">
+                        {isPinRecoveryLocked
+                          ? `Verification on hold for ${pinRecoveryLockoutMinutes}m`
+                          : `${pinRecoveryAttemptsRemaining} attempt${pinRecoveryAttemptsRemaining === 1 ? '' : 's'} remaining (max 3)`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleRequestPinRecovery}
+                        disabled={isRequestingPinRecovery || isPinRecoveryLocked}
+                        className="px-2.5 py-1 rounded-md bg-red-950/80 hover:bg-red-900 border border-red-800/80 text-red-200 text-[10px] font-semibold flex items-center gap-1 disabled:opacity-50 cursor-pointer transition-colors"
+                      >
+                        {isRequestingPinRecovery ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            <span>Sending...</span>
+                          </>
+                        ) : isPinRecoveryLocked ? (
+                          <span>Locked ({pinRecoveryLockoutMinutes}m)</span>
+                        ) : (
+                          <>
+                            <Send className="w-3 h-3" />
+                            <span>{pinRecoveryRequested ? 'Resend Code' : 'Send 6-Digit Code'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {isPinRecoveryLocked && (
+                      <p className="text-[10px] text-red-400 bg-red-950/40 p-2 rounded-lg border border-red-900/60 leading-tight">
+                        Too many OTP requests. PIN recovery for this profile is locked for {pinRecoveryLockoutMinutes} minutes. Please try again later.
+                      </p>
+                    )}
+
+                    {pinRecoveryRequested && (
+                      <div className="space-y-1.5 animate-in fade-in duration-150">
+                        <label className="block text-zinc-300 text-[10px] font-medium">
+                          Enter 6-Digit Code sent to {localUser?.email || currentUser?.email} <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={formData.pinRecoveryOtp}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                            setFormData((prev) => ({ ...prev, pinRecoveryOtp: val }));
+                            setError('');
+                          }}
+                          placeholder="000000"
+                          className="w-full bg-[#18181B] border border-[#27272A] rounded-lg py-2 px-3 text-white font-mono text-center tracking-[0.35em] text-sm focus:outline-none focus:border-[#E11D2E]"
+                          autoComplete="one-time-code"
+                          autoFocus
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
               <div>

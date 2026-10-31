@@ -1,0 +1,117 @@
+/* Dashboard visual layer. Interaction and layout remain driven by the existing components. */
+.sv-dashboard-page {
+  --dashboard-panel: rgba(18, 18, 22, 0.82);
+  --dashboard-panel-strong: rgba(23, 23, 28, 0.94);
+  --dashboard-line: rgba(255, 255, 255, 0.09);
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(229, 9, 42, 0.12), transparent 34rem),
+    #09090b !important;
+}
+
+.sv-dashboard-page > .max-w-6xl {
+  position: relative;
+  z-index: 1;
+}
+
+.sv-dashboard-page .max-w-6xl > .flex.items-center.justify-between {
+  border-bottom-color: var(--dashboard-line);
+  padding-bottom: 1rem;
+}
+
+.sv-dashboard-page .max-w-6xl > .flex.items-center.justify-between > div:first-child {
+  background: rgba(24, 24, 30, 0.7);
+  border-color: var(--dashboard-line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+.sv-dashboard-page .max-w-6xl > .flex.items-center.justify-between > button {
+  background: rgba(24, 24, 30, 0.7);
+  border-color: var(--dashboard-line);
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.sv-dashboard-page .max-w-6xl > .flex.items-center.justify-between > button:hover {
+  border-color: rgba(229, 9, 42, 0.42);
+  background: rgba(35, 25, 30, 0.8);
+  transform: translateY(-1px);
+}
+
+.sv-dashboard-page .max-w-2xl.mx-auto.mb-10 {
+  max-width: 46rem;
+  padding: 1.75rem 1.5rem 1.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 1.5rem;
+  background: linear-gradient(145deg, rgba(23, 23, 28, 0.62), rgba(11, 11, 14, 0.28));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.2);
+}
+
+.sv-dashboard-page .max-w-2xl.mx-auto.mb-10 h1 {
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+}
+
+.sv-dashboard-page .max-w-2xl.mx-auto.mb-10 p {
+  color: #a7a7b2;
+  font-size: 0.9rem;
+}
+
+.sv-dashboard-page .grid.grid-cols-1.lg\:grid-cols-2 > .bg-\[\#121215\]\/90 {
+  background: linear-gradient(145deg, var(--dashboard-panel-strong), var(--dashboard-panel)) !important;
+  border-color: var(--dashboard-line);
+  border-radius: 1.35rem;
+  box-shadow: 0 24px 55px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.sv-dashboard-page .grid.grid-cols-1.lg\:grid-cols-2 > .bg-\[\#121215\]\/90:hover {
+  border-color: rgba(229, 9, 42, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 28px 65px rgba(0, 0, 0, 0.34), 0 0 35px rgba(229, 9, 42, 0.06);
+}
+
+.sv-dashboard-page .grid.grid-cols-1.lg\:grid-cols-2 > .bg-\[\#121215\]\/90 h2 {
+  letter-spacing: -0.02em;
+}
+
+.sv-dashboard-page input,
+.sv-dashboard-page textarea,
+.sv-dashboard-page select {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.sv-dashboard-page input:focus,
+.sv-dashboard-page textarea:focus,
+.sv-dashboard-page select:focus {
+  border-color: rgba(229, 9, 42, 0.72) !important;
+  box-shadow: 0 0 0 3px rgba(229, 9, 42, 0.1);
+}
+
+.sv-dashboard-page .bg-zinc-950\/40,
+.sv-dashboard-page .bg-zinc-950\/60 {
+  background-color: rgba(8, 8, 11, 0.52);
+}
+
+@media (max-width: 640px) {
+  .sv-dashboard-page .max-w-6xl {
+    padding-top: 1.25rem;
+  }
+
+  .sv-dashboard-page .max-w-6xl > .flex.items-center.justify-between {
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .sv-dashboard-page .max-w-6xl > .flex.items-center.justify-between > button {
+    max-width: 48%;
+    text-align: left;
+  }
+
+  .sv-dashboard-page .max-w-2xl.mx-auto.mb-10 {
+    padding: 1.35rem 1rem 1.25rem;
+    border-radius: 1.15rem;
+  }
+}
