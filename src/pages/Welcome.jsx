@@ -19,6 +19,7 @@ import {
 
 export default function Welcome() {
   const videoRef = useRef(null);
+  const [isVideoPlaying, setIsVideoPlaying] = React.useState(false);
 
   // Synchronous DOM attachment via callback ref to guarantee muted autoplay before first paint
   const handleVideoRef = (element) => {
@@ -45,19 +46,23 @@ export default function Welcome() {
       if (!video || !isMounted) return;
       const playPromise = video.play();
       if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // If mobile browser policy deferred playback, start on first finger touch or scroll
-          const unlock = () => {
-            if (video && isMounted && video.paused) {
-              video.play().catch(() => {});
-            }
-          };
+        playPromise
+          .then(() => {
+            if (isMounted) setIsVideoPlaying(true);
+          })
+          .catch(() => {
+            // If mobile browser policy deferred playback, start on first user interaction
+            const unlock = () => {
+              if (video && isMounted && video.paused) {
+                video.play().then(() => setIsVideoPlaying(true)).catch(() => {});
+              }
+            };
 
-          window.addEventListener('touchstart', unlock, { once: true, passive: true });
-          window.addEventListener('touchend', unlock, { once: true, passive: true });
-          window.addEventListener('click', unlock, { once: true, passive: true });
-          window.addEventListener('scroll', unlock, { once: true, passive: true });
-        });
+            window.addEventListener('touchstart', unlock, { once: true, passive: true });
+            window.addEventListener('touchend', unlock, { once: true, passive: true });
+            window.addEventListener('click', unlock, { once: true, passive: true });
+            window.addEventListener('scroll', unlock, { once: true, passive: true });
+          });
       }
     };
 
@@ -93,8 +98,8 @@ export default function Welcome() {
       <div className="sv-welcome-video-container" aria-hidden="true">
         <video
           ref={handleVideoRef}
-          className="sv-welcome-bg-video"
-          src="/gemini_generated_video_38e6201d.mp4"
+          className={`sv-welcome-bg-video ${isVideoPlaying ? 'is-playing' : ''}`}
+          src="/gemini_generated_video_db04c391.mp4"
           autoPlay
           loop
           muted
@@ -108,7 +113,12 @@ export default function Welcome() {
           disableRemotePlayback
           controls={false}
           tabIndex={-1}
-        />
+          onPlaying={() => setIsVideoPlaying(true)}
+          onCanPlay={() => setIsVideoPlaying(true)}
+          onLoadedData={() => setIsVideoPlaying(true)}
+        >
+          <source src="/gemini_generated_video_db04c391.mp4" type="video/mp4" />
+        </video>
         <div className="sv-welcome-video-overlay" />
       </div>
 

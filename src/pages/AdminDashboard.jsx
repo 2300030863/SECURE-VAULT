@@ -345,55 +345,70 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
   });
 
   return (
-    <main className="admin-shell">
+    <main className="admin-shell" data-tab={tab}>
       {/* ---------------- SIDEBAR NAVIGATION ---------------- */}
       <aside className="admin-sidebar">
-        <div className="admin-sidebar-brand">
-          <span>
-            <ShieldCheck size={22} />
-          </span>
-          <div>
-            <b>DocQevrilo</b>
-            <small>CONTROL CENTER</small>
+        <div className="admin-sidebar-header-row">
+          <div className="admin-sidebar-brand">
+            <span>
+              <ShieldCheck size={22} />
+            </span>
+            <div>
+              <b>DocQevrilo</b>
+              <small>CONTROL CENTER</small>
+            </div>
+          </div>
+
+          <div className="admin-sidebar-mobile-user">
+            <div className="admin-session-info">
+              <span className="admin-status-dot" />
+              <span className="admin-session-text">Admin</span>
+            </div>
+            <button onClick={handleLogout} className="admin-signout-btn" title="Sign out of admin session">
+              <LogOut size={15} />
+              <span>Sign out</span>
+            </button>
           </div>
         </div>
 
         <div className="admin-side-label">WORKSPACE</div>
 
-        <button
-          className={`admin-nav-item ${tab === "overview" ? "selected active" : ""}`}
-          onClick={() => setTab("overview")}
-        >
-          <Activity size={17} /> Overview
-        </button>
+        <nav className="admin-nav-tabs">
+          <button
+            className={`admin-nav-item ${tab === "overview" ? "selected active" : ""}`}
+            onClick={() => setTab("overview")}
+          >
+            <Activity size={17} /> <span>Overview</span>
+          </button>
 
-        <button
-          className={`admin-nav-item ${tab === "users" ? "selected active" : ""}`}
-          onClick={() => setTab("users")}
-        >
-          <Users size={17} /> Users ({users.length})
-        </button>
+          <button
+            className={`admin-nav-item ${tab === "users" ? "selected active" : ""}`}
+            onClick={() => setTab("users")}
+          >
+            <Users size={17} /> <span>Users</span> <span className="admin-nav-count">({users.length})</span>
+          </button>
 
-        <button
-          className={`admin-nav-item ${tab === "documents" ? "selected active" : ""}`}
-          onClick={() => setTab("documents")}
-        >
-          <Files size={17} /> Documents ({documents.length})
-        </button>
+          <button
+            className={`admin-nav-item ${tab === "documents" ? "selected active" : ""}`}
+            onClick={() => setTab("documents")}
+          >
+            <Files size={17} /> <span>Documents</span> <span className="admin-nav-count">({documents.length})</span>
+          </button>
 
-        <button
-          className={`admin-nav-item ${tab === "logs" ? "selected active" : ""}`}
-          onClick={() => setTab("logs")}
-        >
-          <ShieldCheck size={17} /> Audit Logs ({logs.length})
-        </button>
+          <button
+            className={`admin-nav-item ${tab === "logs" ? "selected active" : ""}`}
+            onClick={() => setTab("logs")}
+          >
+            <ShieldCheck size={17} /> <span>Audit Logs</span> <span className="admin-nav-count">({logs.length})</span>
+          </button>
 
-        <button
-          className={`admin-nav-item ${tab === "health" ? "selected active" : ""}`}
-          onClick={() => setTab("health")}
-        >
-          <Server size={17} /> System Health
-        </button>
+          <button
+            className={`admin-nav-item ${tab === "health" ? "selected active" : ""}`}
+            onClick={() => setTab("health")}
+          >
+            <Server size={17} /> <span>System Health</span>
+          </button>
+        </nav>
 
         <div className="admin-sidebar-bottom">
           <div className="admin-session-info">
@@ -410,7 +425,7 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
       <section className="admin-main">
         {/* Topbar Header */}
         <header className="admin-topbar">
-          <div>
+          <div className="admin-topbar-title-wrap">
             <span className="admin-eyebrow">ADMINISTRATION CONTROL PANEL</span>
             <h1>
               {tab === "overview" && "Dashboard Overview"}
@@ -428,10 +443,11 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
               title="Clean expired files immediately"
             >
               <Clock3 size={15} className={purging ? "admin-spin-icon" : ""} />
-              {purging ? "Purging Files..." : "Purge Expired"}
+              <span>{purging ? "Purging..." : "Purge Expired"}</span>
             </button>
             <button className="admin-refresh" onClick={loadAll} disabled={loading}>
-              <RefreshCw size={15} className={loading ? "admin-spin-icon" : ""} /> Refresh
+              <RefreshCw size={15} className={loading ? "admin-spin-icon" : ""} />
+              <span>Refresh</span>
             </button>
           </div>
         </header>
@@ -662,49 +678,163 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                 <span /> Loading user data...
               </div>
             ) : (
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>User Account</th>
-                      <th>Role</th>
-                      <th>Status</th>
-                      <th>Verification</th>
-                      <th>Joined</th>
-                      <th style={{ textAlign: "right" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((user) => {
-                      const isSelf = Boolean(
-                        currentAdmin &&
-                          (Number(user.id) === Number(currentAdmin.id) ||
-                            user.email.toLowerCase() === currentAdmin.email.toLowerCase())
-                      );
-                      return (
-                        <tr key={user.id}>
-                          <td>
-                            <div className="admin-user-cell">
-                              <span>{(user.full_name || user.email || "U").slice(0, 1).toUpperCase()}</span>
-                              <div>
-                                <b>{user.full_name || "Unnamed Account"}</b>
-                                <small>{user.email}</small>
+              <>
+                {/* Desktop View Table */}
+                <div className="admin-table-wrap admin-desktop-table">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>User Account</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Verification</th>
+                        <th>Joined</th>
+                        <th style={{ textAlign: "right" }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((user) => {
+                        const isSelf = Boolean(
+                          currentAdmin &&
+                            (Number(user.id) === Number(currentAdmin.id) ||
+                              user.email.toLowerCase() === currentAdmin.email.toLowerCase())
+                        );
+                        return (
+                          <tr key={user.id}>
+                            <td>
+                              <div className="admin-user-cell">
+                                <span>{(user.full_name || user.email || "U").slice(0, 1).toUpperCase()}</span>
+                                <div>
+                                  <b>{user.full_name || "Unnamed Account"}</b>
+                                  <small>{user.email}</small>
+                                </div>
                               </div>
-                            </div>
-                          </td>
+                            </td>
 
-                          <td>
+                            <td>
+                              <span className={`admin-role-badge ${user.role}`}>
+                                {user.role === "admin" ? <Shield size={11} /> : <Users size={11} />}
+                                {user.role}
+                              </span>
+                            </td>
+
+                            <td>
+                              <span className={`admin-state ${user.status}`}>{user.status}</span>
+                            </td>
+
+                            <td>
+                              {user.email_verified ? (
+                                <span className="admin-verified-badge">
+                                  <Check size={12} /> Verified
+                                </span>
+                              ) : (
+                                <button
+                                  className="admin-verify-btn"
+                                  onClick={() => handleVerifyEmail(user)}
+                                  title="Click to manually verify this user"
+                                >
+                                  <UserCheck size={12} /> Mark Verified
+                                </button>
+                              )}
+                            </td>
+
+                            <td>{new Date(user.created_at).toLocaleDateString()}</td>
+
+                            <td>
+                              <div className="admin-action-btn-group">
+                                {/* Suspend / Activate */}
+                                {!isSelf && (
+                                  <button
+                                    className={`admin-action-btn ${user.status === "active" ? "suspend" : "activate"}`}
+                                    onClick={() => handleToggleStatus(user)}
+                                    title={user.status === "active" ? "Suspend user" : "Activate user"}
+                                  >
+                                    {user.status === "active" ? <Ban size={13} /> : <CheckCircle2 size={13} />}
+                                    <span>{user.status === "active" ? "Suspend" : "Activate"}</span>
+                                  </button>
+                                )}
+
+                                {/* Toggle Role */}
+                                {!isSelf && (
+                                  <button
+                                    className="admin-action-btn role"
+                                    onClick={() => handleToggleRole(user)}
+                                    title={user.role === "admin" ? "Demote to User" : "Make Admin"}
+                                  >
+                                    <Shield size={13} />
+                                    <span>{user.role === "admin" ? "Demote" : "Make Admin"}</span>
+                                  </button>
+                                )}
+
+                                {/* Reset Password */}
+                                <button
+                                  className="admin-action-btn reset"
+                                  onClick={() => handleResetPassword(user)}
+                                  title="Reset user password"
+                                >
+                                  <KeyRound size={13} />
+                                  <span>Reset PW</span>
+                                </button>
+
+                                {/* Delete Account */}
+                                {!isSelf && (
+                                  <button
+                                    className="admin-action-btn delete"
+                                    onClick={() => handleDeleteUser(user)}
+                                    title="Permanently delete user"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {!filteredUsers.length && (
+                        <tr>
+                          <td colSpan="6" className="admin-empty">
+                            No users found matching current filters.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile View Cards */}
+                <div className="admin-mobile-card-list">
+                  {filteredUsers.map((user) => {
+                    const isSelf = Boolean(
+                      currentAdmin &&
+                        (Number(user.id) === Number(currentAdmin.id) ||
+                          user.email.toLowerCase() === currentAdmin.email.toLowerCase())
+                    );
+                    return (
+                      <div className="admin-m-card" key={`mobile-user-${user.id}`}>
+                        <div className="admin-m-card-top">
+                          <div className="admin-user-cell">
+                            <span>{(user.full_name || user.email || "U").slice(0, 1).toUpperCase()}</span>
+                            <div>
+                              <b>{user.full_name || "Unnamed Account"}</b>
+                              <small>{user.email}</small>
+                            </div>
+                          </div>
+                          <span className={`admin-state ${user.status}`}>{user.status}</span>
+                        </div>
+
+                        <div className="admin-m-meta-grid">
+                          <div className="admin-m-meta-item">
+                            <span className="admin-m-label">Role</span>
                             <span className={`admin-role-badge ${user.role}`}>
                               {user.role === "admin" ? <Shield size={11} /> : <Users size={11} />}
                               {user.role}
                             </span>
-                          </td>
+                          </div>
 
-                          <td>
-                            <span className={`admin-state ${user.status}`}>{user.status}</span>
-                          </td>
-
-                          <td>
+                          <div className="admin-m-meta-item">
+                            <span className="admin-m-label">Verification</span>
                             {user.email_verified ? (
                               <span className="admin-verified-badge">
                                 <Check size={12} /> Verified
@@ -718,72 +848,63 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                                 <UserCheck size={12} /> Mark Verified
                               </button>
                             )}
-                          </td>
+                          </div>
 
-                          <td>{new Date(user.created_at).toLocaleDateString()}</td>
+                          <div className="admin-m-meta-item full-width">
+                            <span className="admin-m-label">Joined</span>
+                            <span className="admin-m-val">{new Date(user.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
 
-                          <td>
-                            <div className="admin-action-btn-group">
-                              {/* Suspend / Activate */}
-                              {!isSelf && (
-                                <button
-                                  className={`admin-action-btn ${user.status === "active" ? "suspend" : "activate"}`}
-                                  onClick={() => handleToggleStatus(user)}
-                                  title={user.status === "active" ? "Suspend user" : "Activate user"}
-                                >
-                                  {user.status === "active" ? <Ban size={13} /> : <CheckCircle2 size={13} />}
-                                  <span>{user.status === "active" ? "Suspend" : "Activate"}</span>
-                                </button>
-                              )}
+                        <div className="admin-m-actions">
+                          {!isSelf && (
+                            <button
+                              className={`admin-action-btn ${user.status === "active" ? "suspend" : "activate"}`}
+                              onClick={() => handleToggleStatus(user)}
+                            >
+                              {user.status === "active" ? <Ban size={13} /> : <CheckCircle2 size={13} />}
+                              <span>{user.status === "active" ? "Suspend" : "Activate"}</span>
+                            </button>
+                          )}
 
-                              {/* Toggle Role */}
-                              {!isSelf && (
-                                <button
-                                  className="admin-action-btn role"
-                                  onClick={() => handleToggleRole(user)}
-                                  title={user.role === "admin" ? "Demote to User" : "Make Admin"}
-                                >
-                                  <Shield size={13} />
-                                  <span>{user.role === "admin" ? "Demote" : "Make Admin"}</span>
-                                </button>
-                              )}
+                          {!isSelf && (
+                            <button
+                              className="admin-action-btn role"
+                              onClick={() => handleToggleRole(user)}
+                            >
+                              <Shield size={13} />
+                              <span>{user.role === "admin" ? "Demote" : "Make Admin"}</span>
+                            </button>
+                          )}
 
-                              {/* Reset Password */}
-                              <button
-                                className="admin-action-btn reset"
-                                onClick={() => handleResetPassword(user)}
-                                title="Reset user password"
-                              >
-                                <KeyRound size={13} />
-                                <span>Reset PW</span>
-                              </button>
+                          <button
+                            className="admin-action-btn reset"
+                            onClick={() => handleResetPassword(user)}
+                          >
+                            <KeyRound size={13} />
+                            <span>Reset PW</span>
+                          </button>
 
-                              {/* Delete Account */}
-                              {!isSelf && (
-                                <button
-                                  className="admin-action-btn delete"
-                                  onClick={() => handleDeleteUser(user)}
-                                  title="Permanently delete user"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          {!isSelf && (
+                            <button
+                              className="admin-action-btn delete"
+                              onClick={() => handleDeleteUser(user)}
+                              title="Delete user"
+                            >
+                              <Trash2 size={13} />
+                              <span>Delete</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
 
-                    {!filteredUsers.length && (
-                      <tr>
-                        <td colSpan="6" className="admin-empty">
-                          No users found matching current filters.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  {!filteredUsers.length && (
+                    <div className="admin-empty">No users found matching current filters.</div>
+                  )}
+                </div>
+              </>
             )}
           </section>
         )}
@@ -840,45 +961,123 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                 <span /> Loading document records...
               </div>
             ) : (
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Document</th>
-                      <th>Owner</th>
-                      <th>Storage Mode</th>
-                      <th>Size</th>
-                      <th>Views / Downloads</th>
-                      <th>Expires</th>
-                      <th style={{ textAlign: "right" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredDocs.map((doc) => (
-                      <tr key={doc.id}>
-                        <td>
+              <>
+                {/* Desktop View Table */}
+                <div className="admin-table-wrap admin-desktop-table">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Document</th>
+                        <th>Owner</th>
+                        <th>Storage Mode</th>
+                        <th>Size</th>
+                        <th>Views / Downloads</th>
+                        <th>Expires</th>
+                        <th style={{ textAlign: "right" }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredDocs.map((doc) => (
+                        <tr key={doc.id}>
+                          <td>
+                            <b>{doc.original_name}</b>
+                            <small className="admin-doc-type">{doc.mime_type || "File"}</small>
+                          </td>
+
+                          <td>{doc.owner_email || "Anonymous / Legacy"}</td>
+
+                          <td>
+                            <span className={`admin-mode-pill ${doc.storage_mode || "online"}`}>
+                              {doc.storage_mode === "temporary" ? "Temporary" : "Online"}
+                            </span>
+                          </td>
+
+                          <td>{formatBytes(Number(doc.file_size || 0))}</td>
+
+                          <td>
+                            <span className="admin-metrics-pill">
+                              {doc.view_count || 0} views · {doc.download_count || 0}
+                              {doc.max_downloads ? `/${doc.max_downloads}` : ""} DL
+                            </span>
+                          </td>
+
+                          <td>
+                            {doc.expires_at ? (
+                              <span className="admin-expiry-text">
+                                {new Date(doc.expires_at).toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="admin-no-expiry">Never</span>
+                            )}
+                          </td>
+
+                          <td>
+                            <div className="admin-action-btn-group">
+                              <button
+                                className="admin-action-btn inspect"
+                                onClick={() => setSelectedDoc(doc)}
+                                title="Inspect document metadata"
+                              >
+                                <Eye size={13} />
+                                <span>Details</span>
+                              </button>
+
+                              <button
+                                className="admin-action-btn delete"
+                                onClick={() => handleDeleteDocument(doc)}
+                                title="Force delete document"
+                              >
+                                <Trash2 size={13} />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {!filteredDocs.length && (
+                        <tr>
+                          <td colSpan="7" className="admin-empty">
+                            No documents found matching current filter.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile View Cards */}
+                <div className="admin-mobile-card-list">
+                  {filteredDocs.map((doc) => (
+                    <div className="admin-m-card" key={`mobile-doc-${doc.id}`}>
+                      <div className="admin-m-card-top">
+                        <div className="admin-m-doc-title">
                           <b>{doc.original_name}</b>
                           <small className="admin-doc-type">{doc.mime_type || "File"}</small>
-                        </td>
+                        </div>
+                        <span className={`admin-mode-pill ${doc.storage_mode || "online"}`}>
+                          {doc.storage_mode === "temporary" ? "Temporary" : "Online"}
+                        </span>
+                      </div>
 
-                        <td>{doc.owner_email || "Anonymous / Legacy"}</td>
-
-                        <td>
-                          <span className={`admin-mode-pill ${doc.storage_mode || "online"}`}>
-                            {doc.storage_mode === "temporary" ? "Temporary" : "Online"}
-                          </span>
-                        </td>
-
-                        <td>{formatBytes(Number(doc.file_size || 0))}</td>
-
-                        <td>
+                      <div className="admin-m-meta-grid">
+                        <div className="admin-m-meta-item full-width">
+                          <span className="admin-m-label">Owner</span>
+                          <span className="admin-m-val">{doc.owner_email || "Anonymous / Legacy"}</span>
+                        </div>
+                        <div className="admin-m-meta-item">
+                          <span className="admin-m-label">Size</span>
+                          <span className="admin-m-val">{formatBytes(Number(doc.file_size || 0))}</span>
+                        </div>
+                        <div className="admin-m-meta-item">
+                          <span className="admin-m-label">Activity</span>
                           <span className="admin-metrics-pill">
                             {doc.view_count || 0} views · {doc.download_count || 0}
                             {doc.max_downloads ? `/${doc.max_downloads}` : ""} DL
                           </span>
-                        </td>
-
-                        <td>
+                        </div>
+                        <div className="admin-m-meta-item full-width">
+                          <span className="admin-m-label">Expires</span>
                           {doc.expires_at ? (
                             <span className="admin-expiry-text">
                               {new Date(doc.expires_at).toLocaleString()}
@@ -886,42 +1085,34 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                           ) : (
                             <span className="admin-no-expiry">Never</span>
                           )}
-                        </td>
+                        </div>
+                      </div>
 
-                        <td>
-                          <div className="admin-action-btn-group">
-                            <button
-                              className="admin-action-btn inspect"
-                              onClick={() => setSelectedDoc(doc)}
-                              title="Inspect document metadata"
-                            >
-                              <Eye size={13} />
-                              <span>Details</span>
-                            </button>
+                      <div className="admin-m-actions">
+                        <button
+                          className="admin-action-btn inspect"
+                          onClick={() => setSelectedDoc(doc)}
+                        >
+                          <Eye size={13} />
+                          <span>Details</span>
+                        </button>
 
-                            <button
-                              className="admin-action-btn delete"
-                              onClick={() => handleDeleteDocument(doc)}
-                              title="Force delete document"
-                            >
-                              <Trash2 size={13} />
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                        <button
+                          className="admin-action-btn delete"
+                          onClick={() => handleDeleteDocument(doc)}
+                        >
+                          <Trash2 size={13} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
 
-                    {!filteredDocs.length && (
-                      <tr>
-                        <td colSpan="7" className="admin-empty">
-                          No documents found matching current filter.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  {!filteredDocs.length && (
+                    <div className="admin-empty">No documents found matching current filter.</div>
+                  )}
+                </div>
+              </>
             )}
           </section>
         )}
@@ -965,44 +1156,80 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                 <span /> Loading audit records...
               </div>
             ) : (
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Action</th>
-                      <th>Admin Actor</th>
-                      <th>Target ID</th>
-                      <th>IP Address</th>
-                      <th>Timestamp</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredLogs.map((log) => (
-                      <tr key={log.id}>
-                        <td>
-                          <span className="admin-audit-action">
-                            <code>{log.action}</code>
-                          </span>
-                        </td>
-                        <td>{log.admin_email}</td>
-                        <td>{log.target_user_id || "—"}</td>
-                        <td>
-                          <span className="admin-ip-pill">{log.ip_address || "127.0.0.1"}</span>
-                        </td>
-                        <td>{new Date(log.created_at).toLocaleString()}</td>
-                      </tr>
-                    ))}
-
-                    {!filteredLogs.length && (
+              <>
+                {/* Desktop View Table */}
+                <div className="admin-table-wrap admin-desktop-table">
+                  <table className="admin-table">
+                    <thead>
                       <tr>
-                        <td colSpan="5" className="admin-empty">
-                          No audit events recorded yet.
-                        </td>
+                        <th>Action</th>
+                        <th>Admin Actor</th>
+                        <th>Target ID</th>
+                        <th>IP Address</th>
+                        <th>Timestamp</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {filteredLogs.map((log) => (
+                        <tr key={log.id}>
+                          <td>
+                            <span className="admin-audit-action">
+                              <code>{log.action}</code>
+                            </span>
+                          </td>
+                          <td>{log.admin_email}</td>
+                          <td>{log.target_user_id || "—"}</td>
+                          <td>
+                            <span className="admin-ip-pill">{log.ip_address || "127.0.0.1"}</span>
+                          </td>
+                          <td>{new Date(log.created_at).toLocaleString()}</td>
+                        </tr>
+                      ))}
+
+                      {!filteredLogs.length && (
+                        <tr>
+                          <td colSpan="5" className="admin-empty">
+                            No audit events recorded yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile View Cards */}
+                <div className="admin-mobile-card-list">
+                  {filteredLogs.map((log) => (
+                    <div className="admin-m-card" key={`mobile-log-${log.id}`}>
+                      <div className="admin-m-card-top">
+                        <span className="admin-audit-action">
+                          <code>{log.action}</code>
+                        </span>
+                        <span className="admin-m-time">{new Date(log.created_at).toLocaleString()}</span>
+                      </div>
+
+                      <div className="admin-m-meta-grid">
+                        <div className="admin-m-meta-item full-width">
+                          <span className="admin-m-label">Admin Actor</span>
+                          <span className="admin-m-val">{log.admin_email}</span>
+                        </div>
+                        <div className="admin-m-meta-item">
+                          <span className="admin-m-label">Target ID</span>
+                          <span className="admin-m-val">{log.target_user_id || "—"}</span>
+                        </div>
+                        <div className="admin-m-meta-item">
+                          <span className="admin-m-label">IP Address</span>
+                          <span className="admin-ip-pill">{log.ip_address || "127.0.0.1"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {!filteredLogs.length && (
+                    <div className="admin-empty">No audit events recorded yet.</div>
+                  )}
+                </div>
+              </>
             )}
           </section>
         )}
