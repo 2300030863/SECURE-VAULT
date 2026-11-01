@@ -147,6 +147,16 @@ export const authService = {
       localStorage.removeItem('sv_token');
     }
 
+    if (data.user?.role === 'admin') {
+      sessionStorage.setItem('sv_admin_token', data.token);
+      if (rememberMe) {
+        localStorage.setItem('sv_admin_token', data.token);
+      }
+    } else {
+      sessionStorage.removeItem('sv_admin_token');
+      localStorage.removeItem('sv_admin_token');
+    }
+
     return {
       success: true,
       user: data.user,
@@ -166,6 +176,8 @@ export const authService = {
       authToken = null;
       sessionStorage.removeItem('sv_token');
       localStorage.removeItem('sv_token');
+      sessionStorage.removeItem('sv_admin_token');
+      localStorage.removeItem('sv_admin_token');
     }
     return { success: true };
   },
@@ -174,7 +186,7 @@ export const authService = {
    * Get the current authenticated user from TiDB
    */
   async getCurrentUser() {
-    const token = authToken || sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token');
+    const token = this.getToken();
     if (!token) return null;
 
     try {
@@ -206,7 +218,14 @@ export const authService = {
    * Retrieve active authentication JWT token string
    */
   getToken() {
-    return authToken || sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token') || null;
+    return (
+      authToken ||
+      sessionStorage.getItem('sv_token') ||
+      localStorage.getItem('sv_token') ||
+      sessionStorage.getItem('sv_admin_token') ||
+      localStorage.getItem('sv_admin_token') ||
+      null
+    );
   },
 
   /**

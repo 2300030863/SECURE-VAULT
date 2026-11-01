@@ -75,9 +75,12 @@ export default function Login({ onLoginSuccess }) {
       });
 
       if (result.success) {
+        const isAdmin = result.user?.role === 'admin';
         setStatusMessage({
           type: 'success',
-          message: 'Sign in successful! Redirecting to your vault...',
+          message: isAdmin
+            ? 'Administrator sign in verified! Redirecting to Control Center...'
+            : 'Sign in successful! Redirecting to your vault...',
         });
 
         if (onLoginSuccess) {
@@ -85,13 +88,21 @@ export default function Login({ onLoginSuccess }) {
         }
 
         setTimeout(() => {
-          navigate('/vault');
-        }, 800);
+          if (isAdmin) {
+            navigate('/admin');
+          } else {
+            navigate('/vault');
+          }
+        }, 600);
       }
     } catch (err) {
+      let errMsg = err.message || 'Unable to sign in. Please check your credentials.';
+      if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+        errMsg = 'Cannot reach the backend server on http://localhost:5000. Please ensure the backend is running (`npm run dev`).';
+      }
       setStatusMessage({
         type: 'error',
-        message: err.message || 'Unable to sign in. Please check your credentials.',
+        message: errMsg,
         requiresEmailVerification: Boolean(err.requiresEmailVerification),
         email: err.email || formData.email.trim().toLowerCase(),
       });
@@ -130,7 +141,7 @@ export default function Login({ onLoginSuccess }) {
             </div>
             <h1 className="sv-auth-title">Welcome back</h1>
             <p className="sv-auth-subtitle">
-              Sign in to manage and share your DocQevrilo documents.
+              Sign in with your user or administrator account.
             </p>
           </div>
 

@@ -21,6 +21,8 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VaultDashboard from './pages/VaultDashboard';
 import NotFound from './pages/NotFound';
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
 
 // Import Auth Service
 import { authService } from './services/authService';
@@ -77,6 +79,16 @@ export default function App() {
             <Route
               path="/login"
               element={<Login onLoginSuccess={handleLoginSuccess} />}
+            />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route
+              path="/admin"
+              element={
+                <AdminDashboard
+                  currentUser={currentUser}
+                  onAdminLoaded={(u) => setCurrentUser(u)}
+                />
+              }
             />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />

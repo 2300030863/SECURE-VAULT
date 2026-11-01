@@ -45,7 +45,7 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
   const [editDeleteAfterDownload, setEditDeleteAfterDownload] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState('');
-  
+
   // 2FA Access Code Protection State
   const [revealedCodes, setRevealedCodes] = useState({});
   const [securityModalDoc, setSecurityModalDoc] = useState(null);
@@ -135,9 +135,12 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
         ? `/api/documents/view/${encodeURIComponent(doc.access_code)}`
         : `/api/documents/owner/${doc.id}/view`);
 
-    const token = authService.getToken ? authService.getToken() : (sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token'));
-    if (token && !rawUrl.includes('token=')) {
-      rawUrl += (rawUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+    // Only append fallback credentials if not using public code and no scoped ticket exists
+    if (!doc.access_code && !rawUrl.includes('ticket=') && !rawUrl.includes('token=')) {
+      const token = authService.getToken ? authService.getToken() : (sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token'));
+      if (token) {
+        rawUrl += (rawUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+      }
     }
     return apiUrl(rawUrl);
   };
@@ -149,9 +152,12 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
         ? `/api/documents/download/${encodeURIComponent(doc.access_code)}?action=download`
         : `/api/documents/owner/${doc.id}/download`);
 
-    const token = authService.getToken ? authService.getToken() : (sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token'));
-    if (token && !rawUrl.includes('token=')) {
-      rawUrl += (rawUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+    // Only append fallback credentials if not using public code and no scoped ticket exists
+    if (!doc.access_code && !rawUrl.includes('ticket=') && !rawUrl.includes('token=')) {
+      const token = authService.getToken ? authService.getToken() : (sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token'));
+      if (token) {
+        rawUrl += (rawUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+      }
     }
     return apiUrl(rawUrl);
   };
@@ -453,11 +459,10 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                         </div>
                         <div className="w-full h-1.5 bg-[#18181B] rounded-full overflow-hidden border border-zinc-800">
                           <div
-                            className={`h-full transition-all duration-300 ${
-                              isLimitReached
+                            className={`h-full transition-all duration-300 ${isLimitReached
                                 ? 'bg-amber-500'
                                 : 'bg-gradient-to-r from-[#E11D2E] to-red-500'
-                            }`}
+                              }`}
                             style={{
                               width: `${Math.min(
                                 100,
@@ -476,9 +481,8 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                         <span>Expiry:</span>
                       </span>
                       <span
-                        className={`font-medium ${
-                          timeRemaining.isExpired ? 'text-red-400 font-bold' : 'text-zinc-200'
-                        }`}
+                        className={`font-medium ${timeRemaining.isExpired ? 'text-red-400 font-bold' : 'text-zinc-200'
+                          }`}
                       >
                         {timeRemaining.text}
                       </span>
@@ -604,11 +608,10 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                         setTimeout(fetchDocuments, 1500);
                       }
                     }}
-                    className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-center cursor-pointer shadow-sm ${
-                      previewDocId === doc.id
+                    className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-center cursor-pointer shadow-sm ${previewDocId === doc.id
                         ? 'bg-[#E11D2E]/20 border-[#E11D2E] text-white'
                         : 'bg-[#18181B] hover:bg-[#27272A] border-[#27272A] hover:border-[#E11D2E]/50 text-zinc-200'
-                    }`}
+                      }`}
                     title={previewDocId === doc.id ? 'Close Quick Preview' : 'Open Quick Preview'}
                   >
                     <Eye className="w-3.5 h-3.5 text-[#E11D2E]" />
@@ -782,11 +785,10 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                         if (editMaxDownloads === 5) setEditMaxDownloads('unlimited');
                       }
                     }}
-                    className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
-                      editStorageMode === mode.id
+                    className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${editStorageMode === mode.id
                         ? 'bg-red-950/70 border-[#E11D2E] text-white font-bold shadow-sm'
                         : 'bg-[#121215] border-[#27272A] text-zinc-400 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <div className="text-xs">{mode.label}</div>
                     <div className="text-[10px] text-zinc-500">{mode.desc}</div>
@@ -821,11 +823,10 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
                       type="button"
                       key={String(opt.value)}
                       onClick={() => setEditMaxDownloads(opt.value)}
-                      className={`py-2 px-2.5 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${
-                        isSelected
+                      className={`py-2 px-2.5 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${isSelected
                           ? 'bg-red-950/70 border-[#E11D2E] text-white shadow-sm'
                           : 'bg-[#121215] border-[#27272A] text-zinc-400 hover:text-white'
-                      }`}
+                        }`}
                     >
                       {opt.label}
                     </button>
@@ -846,16 +847,14 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth }) {
               <button
                 type="button"
                 onClick={() => setEditDeleteAfterDownload(!editDeleteAfterDownload)}
-                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 border ${
-                  editDeleteAfterDownload
+                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 border ${editDeleteAfterDownload
                     ? 'bg-[#E11D2E] border-[#E11D2E]'
                     : 'bg-[#27272A] border-[#3F3F46]'
-                }`}
+                  }`}
               >
                 <div
-                  className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 absolute top-0.5 ${
-                    editDeleteAfterDownload ? 'left-6' : 'left-1'
-                  }`}
+                  className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 absolute top-0.5 ${editDeleteAfterDownload ? 'left-6' : 'left-1'
+                    }`}
                 />
               </button>
             </div>
