@@ -467,6 +467,48 @@
   color: #ffffff;
 }
 
+.sv-status-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(229, 9, 42, 0.08);
+  border: 1px solid rgba(229, 9, 42, 0.3);
+  border-radius: 8px;
+  padding: 6px 11px;
+  color: #f4f4f5;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.01em;
+}
+
+.sv-status-pill-btn:hover {
+  background: rgba(229, 9, 42, 0.18);
+  border-color: rgba(229, 9, 42, 0.55);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.sv-footer-text-action-link {
+  text-align: left;
+  color: #a1a1aa;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.18s ease;
+}
+
+.sv-footer-text-action-link:hover {
+  color: #ffffff;
+}
+
 /* Nav Columns */
 .sv-footer-col-title {
   font-size: 0.74rem;
@@ -707,6 +749,49 @@
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 0.78rem;
   color: #71717a;
+}
+
+/* Footer Live Status Strip */
+.sv-footer-status-pill-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sv-footer-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: default;
+  transition: all 0.2s ease;
+}
+
+.sv-status-badge-ok {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.28);
+  color: #34d399;
+}
+
+.sv-status-badge-philosophy {
+  background: rgba(229, 9, 42, 0.1);
+  border-color: rgba(229, 9, 42, 0.35);
+  color: #f4f4f5;
+  cursor: pointer;
+}
+
+.sv-status-badge-philosophy:hover {
+  background: rgba(229, 9, 42, 0.2);
+  border-color: rgba(229, 9, 42, 0.6);
+  color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .sv-footer-copyright strong {

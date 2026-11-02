@@ -9,9 +9,12 @@ import {
   ExternalLink,
   ArrowRight,
   Lock,
+  Coffee,
+  Activity,
+  Terminal,
 } from 'lucide-react';
 
-const DEVELOPER_NAME = 'KOMMALAPATI SIVESH';
+const DEVELOPER_NAME = 'Kommalapati Sivesh';
 
 /**
  * Custom hook for smooth typing and retyping animation of the developer name
@@ -61,6 +64,10 @@ export default function Footer({ currentUser }) {
     window.dispatchEvent(new CustomEvent('open_brand_meaning'));
   };
 
+  const handleOpenStatusProtocols = () => {
+    window.dispatchEvent(new CustomEvent('open_status_protocols'));
+  };
+
   return (
     <footer className="sv-footer" role="contentinfo" aria-label="DocQevrilo site footer">
       {/* Ambient Top Glow Line */}
@@ -102,7 +109,17 @@ export default function Footer({ currentUser }) {
                 title="Discover the origin and meaning of the DocQevrilo name"
               >
                 <Sparkles size={13} className="text-[#E11D2E]" />
-                <span>DocQevrilo Brand Meaning</span>
+                <span>Brand Meaning</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenStatusProtocols}
+                className="sv-status-pill-btn"
+                title="RFC 2324 Developer Reference: Click to view 418, 200, 401, 403, 404, 500 status protocols"
+              >
+                <Coffee size={13} className="text-[#E11D2E]" />
+                <span>418 · Privacy Is Not Optional</span>
               </button>
             </div>
           </div>
@@ -151,6 +168,16 @@ export default function Footer({ currentUser }) {
               <li>
                 <Link to="/forgot-password">Reset Password</Link>
               </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={handleOpenStatusProtocols}
+                  className="sv-footer-text-action-link"
+                >
+                  <Activity size={12} className="text-[#E11D2E]" />
+                  <span>Status Protocols (200 / 418)</span>
+                </button>
+              </li>
               <li className="sv-footer-meta-pill">
                 <span className="text-zinc-400">Zero-Knowledge</span>
               </li>
@@ -187,7 +214,7 @@ export default function Footer({ currentUser }) {
               <div className="sv-dev-card-bottom">
                 <span className="sv-dev-connect-kicker">LET'S CONNECT</span>
                 <a
-                  href="https://kommalapatisivesh.me"
+                  href="https://kommalaptisivesh.me"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="sv-dev-portfolio-link"
@@ -195,7 +222,7 @@ export default function Footer({ currentUser }) {
                 >
                   <span className="sv-dev-link-lead">Let's Connect</span>
                   <span className="sv-dev-link-arrow">&rarr;</span>
-                  <span className="sv-dev-link-url">kommalapatisivesh.me</span>
+                  <span className="sv-dev-link-url">kommalaptisivesh.me</span>
                   <ExternalLink size={12} className="sv-dev-link-ext" />
                 </a>
               </div>
@@ -207,6 +234,23 @@ export default function Footer({ currentUser }) {
         <div className="sv-footer-bottom-bar">
           <div className="sv-footer-copyright">
             &copy; {currentYear} <strong>DocQevrilo</strong>. All rights reserved.
+          </div>
+
+          {/* Live Telemetry & Philosophy Strip */}
+          <div className="sv-footer-status-pill-group">
+            <div className="sv-footer-status-badge sv-status-badge-ok" title="All vault microservices operational">
+              <span className="sv-pulse-dot" />
+              <span>200 · System Operational</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleOpenStatusProtocols}
+              className="sv-footer-status-badge sv-status-badge-philosophy"
+              title="RFC 2324 Developer Reference: Click to view status code definitions"
+            >
+              <Coffee size={12} className="text-[#E11D2E]" />
+              <span>418 · Privacy Is Not Optional</span>
+            </button>
           </div>
 
           <div className="sv-footer-built-signature">

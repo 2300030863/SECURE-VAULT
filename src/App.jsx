@@ -12,6 +12,7 @@ import './styles/dashboard.css';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import BrandMeaningModal from './components/BrandMeaningModal';
+import StatusCodeProtocolModal from './components/StatusCodeProtocolModal';
 
 // Import Pages
 import Welcome from './pages/Welcome';
@@ -171,6 +172,7 @@ export default function App() {
         {/* Global Footer (rendered across all public pages, hidden on dashboard) */}
         <AppFooter currentUser={currentUser} />
         <BrandMeaningModal />
+        <StatusCodeProtocolModal />
       </div>
     </Router>
   );
