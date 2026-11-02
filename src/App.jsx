@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 // Import CSS Design System
 import './styles/global.css';
@@ -24,12 +24,25 @@ import NotFound from './pages/NotFound';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 
-// Import Auth Service
+// Import Auth Service & API Configuration
 import { authService } from './services/authService';
+import { API_BASE_URL } from './config/api';
+
+function AppFooter({ currentUser }) {
+  const location = useLocation();
+  const isVaultOrAdmin =
+    location.pathname.startsWith('/vault') ||
+    location.pathname.startsWith('/admin') ||
+    location.pathname === '/dashboard';
+
+  if (isVaultOrAdmin) return null;
+  return <Footer currentUser={currentUser} />;
+}
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [platformAnnouncement, setPlatformAnnouncement] = useState(null);
 
   useEffect(() => {
     async function checkAuth() {
@@ -43,6 +56,17 @@ export default function App() {
       }
     }
     checkAuth();
+
+    // Check for active broadcast announcement banner
+    fetch(`${API_BASE_URL}/announcement`)
+      .then((r) => r.json())
+      .then((data) => {
+        const ann = data?.announcement || data;
+        if (ann?.active && ann?.message) {
+          setPlatformAnnouncement(ann);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleLoginSuccess = (user) => {
@@ -73,9 +97,54 @@ export default function App() {
           }}
         />
 
+        {platformAnnouncement?.active && (
+          <div
+            style={{
+              width: "100%",
+              padding: "10px 16px",
+              background:
+                platformAnnouncement.type === "critical"
+                  ? "linear-gradient(90deg, #b91c1c, #e50936, #b91c1c)"
+                  : platformAnnouncement.type === "warning"
+                  ? "linear-gradient(90deg, #92400e, #d97706, #92400e)"
+                  : "linear-gradient(90deg, #1e3a8a, #2563eb, #1e3a8a)",
+              color: "#ffffff",
+              fontSize: "13px",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "10px",
+              textAlign: "center",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.4)",
+              zIndex: 50,
+              boxSizing: "border-box",
+            }}
+          >
+            <span>📢 {platformAnnouncement.message}</span>
+            <button
+              onClick={() => setPlatformAnnouncement(null)}
+              style={{
+                background: "transparent",
+                border: 0,
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: "15px",
+                marginLeft: "8px",
+                padding: "2px 6px",
+                borderRadius: "4px",
+              }}
+              title="Dismiss announcement"
+              aria-label="Dismiss announcement"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <main style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
           <Routes>
-            <Route path="/" element={<Welcome />} />
+            <Route path="/" element={<Welcome currentUser={currentUser} />} />
             <Route
               path="/login"
               element={<Login onLoginSuccess={handleLoginSuccess} />}
@@ -99,8 +168,8 @@ export default function App() {
           </Routes>
         </main>
 
-        {/* Only show footer when user is not signed in */}
-        {!currentUser && <Footer />}
+        {/* Global Footer (rendered across all public pages, hidden on dashboard) */}
+        <AppFooter currentUser={currentUser} />
         <BrandMeaningModal />
       </div>
     </Router>

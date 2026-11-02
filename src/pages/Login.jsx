@@ -75,12 +75,9 @@ export default function Login({ onLoginSuccess }) {
       });
 
       if (result.success) {
-        const isAdmin = result.user?.role === 'admin';
         setStatusMessage({
           type: 'success',
-          message: isAdmin
-            ? 'Administrator sign in verified! Redirecting to Control Center...'
-            : 'Sign in successful! Redirecting to your vault...',
+          message: 'Sign in successful! Redirecting to your vault...',
         });
 
         if (onLoginSuccess) {
@@ -88,12 +85,8 @@ export default function Login({ onLoginSuccess }) {
         }
 
         setTimeout(() => {
-          if (isAdmin) {
-            navigate('/admin');
-          } else {
-            navigate('/vault');
-          }
-        }, 600);
+          navigate('/vault');
+        }, 500);
       }
     } catch (err) {
       let errMsg = err.message || 'Unable to sign in. Please check your credentials.';
@@ -141,7 +134,7 @@ export default function Login({ onLoginSuccess }) {
             </div>
             <h1 className="sv-auth-title">Welcome back</h1>
             <p className="sv-auth-subtitle">
-              Sign in with your user or administrator account.
+              Sign in to access your personal document vault.
             </p>
           </div>
 

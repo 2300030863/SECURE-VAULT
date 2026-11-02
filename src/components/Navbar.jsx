@@ -38,18 +38,6 @@ export default function Navbar({ isAuthenticated = false, currentUser = null, on
               <span>Document Vault</span>
             </NavLink>
           </li>
-          {isAuthenticated && currentUser?.role === 'admin' && (
-            <li>
-              <NavLink
-                to="/admin"
-                className={({ isActive }) => `sv-nav-link ${isActive ? 'active' : ''}`}
-                style={{ color: '#ff4d6d' }}
-              >
-                <Shield size={15} />
-                <span>Control Center</span>
-              </NavLink>
-            </li>
-          )}
           {!isAuthenticated ? (
             <>
               <li>
@@ -171,17 +159,6 @@ export default function Navbar({ isAuthenticated = false, currentUser = null, on
           <FolderLock size={16} />
           <span>Document Vault</span>
         </NavLink>
-        {isAuthenticated && currentUser?.role === 'admin' && (
-          <NavLink
-            to="/admin"
-            className={({ isActive }) => `sv-nav-link ${isActive ? 'active' : ''}`}
-            onClick={handleLinkClick}
-            style={{ color: '#ff4d6d' }}
-          >
-            <Shield size={16} />
-            <span>Admin Control Center</span>
-          </NavLink>
-        )}
         {!isAuthenticated ? (
           <>
             <NavLink
