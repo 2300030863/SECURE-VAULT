@@ -75,9 +75,12 @@ export default function Login({ onLoginSuccess }) {
       });
 
       if (result.success) {
+        const isAdmin = result.user?.role === 'admin';
         setStatusMessage({
           type: 'success',
-          message: 'Sign in successful! Redirecting to your vault...',
+          message: isAdmin
+            ? 'Administrator sign in verified! Redirecting to Control Center...'
+            : 'Sign in successful! Redirecting to your vault...',
         });
 
         if (onLoginSuccess) {
@@ -85,7 +88,7 @@ export default function Login({ onLoginSuccess }) {
         }
 
         setTimeout(() => {
-          navigate('/vault');
+          navigate(isAdmin ? '/admin' : '/vault');
         }, 500);
       }
     } catch (err) {
