@@ -1,0 +1,53 @@
+# DocQevrilo — Full System Documentation for LLMs
+
+> Comprehensive reference for DocQevrilo: Zero-Knowledge Document Vault & Multimodal AI Study Assistant.
+
+## Overview
+DocQevrilo is a modern web application designed for zero-knowledge, encrypted document sharing and multimodal AI processing. Instead of uploading sensitive files to insecure third-party cloud drives or sharing passwords over messaging apps, users upload files directly with client-side encryption and generate one-time, time-limited cryptographic access codes.
+
+Website: https://secure-vault-delta-virid.vercel.app/
+Author: Kommalapati Sivesh (https://kommalaptisivesh.me)
+
+## Supported File Types & Multimodal Capabilities
+
+### 1. Spreadsheets & Data
+- Extensions: .xlsx, .xls, .csv, .tsv
+- Engine: Tabular AI parser
+- Capabilities: Row-by-row digitizing, financial calculations, formula inspections, tabular Q&A.
+
+### 2. Documents & Presentations
+- Extensions: .pdf, .docx, .doc, .pptx, .txt, .rtf
+- Engine: PDF/DOCX page-by-page and slide-by-slide text extraction
+- Capabilities: Executive study summaries, citations with exact page numbers, automated quiz generation.
+
+### 3. Images & Visual Media
+- Extensions: .png, .jpg, .jpeg, .webp, .gif, .bmp, .svg
+- Engine: Groq Vision (llama-3.2-11b-vision-preview)
+- Capabilities: High-accuracy OCR, handwritten notes parsing, whiteboard transcription, diagram and UI wireframe analysis.
+
+### 4. Audio Recordings & Voice Memos
+- Extensions: .mp3, .wav, .m4a, .ogg, .flac, .aac, .webm
+- Engine: Groq Whisper (whisper-large-v3-turbo)
+- Capabilities: Speech-to-text with timestamped markers ([MM:SS]), speaker intent parsing, action item generation.
+
+### 5. Compressed Archives & Bundles
+- Extensions: .zip, .rar, .7z, .tar, .gz
+- Engine: Deep Archive Scanner
+- Capabilities: Recursive nested archive extraction, unpacking all documents, images, audio, and code into a single unified knowledge index.
+
+### 6. Developer Source Code
+- Extensions: .js, .ts, .jsx, .tsx, .py, .java, .c, .cpp, .sql, .html, .css, .json, .md
+- Engine: Syntax Comprehension & Logic Analysis
+- Capabilities: Code explanation, security audits, bug spotting, architectural mapping.
+
+## Security Architecture
+- Client-Side AES-GCM-256: Files are encrypted with random 256-bit symmetric keys before leaving the user's browser.
+- Ephemeral Access Codes: 6-character cryptographic tokens.
+- Automatic Burn-After-Reading: Codes and documents can be set to self-destruct after the first download or after a specified expiration window (e.g., 10 minutes to 7 days).
+- Zero-Knowledge Backend: The storage backend cannot inspect user file contents without user authorization.
+
+## Endpoints & Discovery
+- ARD Manifest: https://secure-vault-delta-virid.vercel.app/.well-known/ard.json
+- LLMs File: https://secure-vault-delta-virid.vercel.app/llms.txt
+- Sitemap: https://secure-vault-delta-virid.vercel.app/sitemap.xml
+- Robots: https://secure-vault-delta-virid.vercel.app/robots.txt

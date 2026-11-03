@@ -1,0 +1,55 @@
+{
+  "$schema": "https://agenticresourcediscovery.org/schemas/v1/manifest.json",
+  "entries": [
+    {
+      "@context": "https://agenticresourcediscovery.org/context/v1",
+      "identifier": "urn:air:secure-vault-delta-virid.vercel.app:ai:multimodal-vault-assistant",
+      "displayName": "DocQevrilo Multimodal AI Assistant",
+      "type": "application/ai-skill",
+      "url": "https://secure-vault-delta-virid.vercel.app/vault",
+      "description": "Zero-knowledge document sharing platform and multimodal AI study assistant. Analyzes documents, images with Groq Vision OCR, audio with Whisper, and deep-extracts ZIP archives.",
+      "representativeQueries": [
+        "Upload and encrypt a confidential PDF document",
+        "Generate a one-time access code for file transfer",
+        "Summarize this document using AI",
+        "Extract text and handwriting from whiteboard images",
+        "Transcribe meeting audio recording into timestamped notes"
+      ],
+      "tags": [
+        "document-vault",
+        "zero-knowledge",
+        "groq-ai",
+        "ocr",
+        "whisper",
+        "encryption",
+        "file-sharing"
+      ],
+      "trustManifest": {
+        "identity": "https://secure-vault-delta-virid.vercel.app",
+        "identityType": "https",
+        "attestations": []
+      }
+    },
+    {
+      "@context": "https://agenticresourcediscovery.org/context/v1",
+      "identifier": "urn:air:secure-vault-delta-virid.vercel.app:documentation:llms-txt",
+      "displayName": "DocQevrilo LLMs Documentation",
+      "type": "text/markdown",
+      "url": "https://secure-vault-delta-virid.vercel.app/llms.txt",
+      "description": "Machine-readable site overview and API capabilities for Large Language Models.",
+      "representativeQueries": [
+        "What file formats does DocQevrilo support?",
+        "How does DocQevrilo ensure zero-knowledge encryption?"
+      ],
+      "tags": [
+        "documentation",
+        "llms-txt"
+      ],
+      "trustManifest": {
+        "identity": "https://secure-vault-delta-virid.vercel.app",
+        "identityType": "https",
+        "attestations": []
+      }
+    }
+  ]
+}
