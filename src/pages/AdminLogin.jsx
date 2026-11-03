@@ -125,9 +125,14 @@ export default function AdminLogin() {
           </button>
         </div>
 
-        <Link className="admin-back-link" to="/login">
-          ← Return to user sign in
-        </Link>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <Link className="admin-back-link" to="/login" style={{ margin: 0 }}>
+            ← Return to user sign in
+          </Link>
+          <Link className="admin-back-link" to="/" style={{ margin: 0 }}>
+            ← Back to Home
+          </Link>
+        </div>
       </section>
     </main>
   );

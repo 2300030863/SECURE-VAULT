@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, KeyRound, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Mail, KeyRound, ArrowRight, ArrowLeft, Home } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
 import FormMessage from '../components/FormMessage';
 import { authService } from '../services/authService';
@@ -71,6 +71,12 @@ export default function ForgotPassword() {
   return (
     <div className="sv-page-wrapper auth-page">
       <div className="sv-auth-container">
+        {/* Back to Home Navigation */}
+        <Link to="/" className="sv-auth-back-link" title="Return to DocQevrilo Home">
+          <ArrowLeft size={16} className="sv-back-arrow" />
+          <span>Back to Home</span>
+        </Link>
+
         <GlassCard highlightCrimson className="sv-auth-card auth-card">
           {/* Header */}
           <div className="sv-auth-header">
@@ -190,6 +196,13 @@ export default function ForgotPassword() {
             >
               <ArrowLeft size={16} />
               <span>Back to Login</span>
+            </Link>
+          </div>
+
+          <div style={{ marginTop: '1rem', textAlign: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.85rem' }}>
+            <Link to="/" className="sv-auth-home-return-link" title="Return to DocQevrilo Home">
+              <Home size={14} className="text-[#E11D2E]" />
+              <span>Return to Home Page</span>
             </Link>
           </div>
         </GlassCard>

@@ -448,9 +448,10 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
       if (res?.message) setEmailMessage(res.message);
       if (res?.category) setEmailCategory(res.category);
 
+      const categoryLabel = String(res?.category || "announcement").toUpperCase();
       showBanner(
         "success",
-        `✨ Grok AI drafted your email! Subject & message populated with ${res.category.toUpperCase()} styling.`
+        `✨ AI drafted your email! Subject & message populated with ${categoryLabel} styling.`
       );
     } catch (err) {
       showBanner("error", err.message || "Failed to generate email with Grok AI.");
@@ -1752,7 +1753,7 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                           border: `1px solid ${emailStatus?.grokConfigured ? "rgba(229, 9, 54, 0.35)" : "rgba(113, 113, 122, 0.3)"}`,
                         }}
                       >
-                        {emailStatus?.grokConfigured ? "xAI Grok Ready" : "Grok Key Setup"}
+                        {emailStatus?.grokConfigured ? (emailStatus?.aiProvider || "Groq AI Ready") : "AI Setup Needed"}
                       </span>
                       <span
                         style={{
@@ -1776,10 +1777,10 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                   <div className="admin-grok-header">
                     <div className="admin-grok-title">
                       <Sparkles size={16} style={{ color: "#ff365c" }} />
-                      <span>Grok AI Email Generator</span>
+                      <span>AI Email Generator</span>
                     </div>
                     <span className="admin-grok-badge ready">
-                      ✨ Grok AI Active (.env)
+                      ✨ {emailStatus?.aiProvider || "Groq AI Active"} (.env)
                     </span>
                   </div>
 

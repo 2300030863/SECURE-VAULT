@@ -37,6 +37,8 @@ import {
   HardDrive,
   Tag,
   Sparkles,
+  Music,
+  HelpCircle,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
@@ -50,6 +52,7 @@ import OnlineSharingSettings from '../components/sharing/OnlineSharingSettings';
 import TemporaryStorageSettings from '../components/sharing/TemporaryStorageSettings';
 import MySharedDocuments from '../components/sharing/MySharedDocuments';
 import AiDocumentModal from '../components/ai/AiDocumentModal';
+import SupportedFormatsModal from '../components/SupportedFormatsModal';
 
 export default function VaultDashboard({ currentUser }) {
   const navigate = useNavigate();
@@ -57,6 +60,7 @@ export default function VaultDashboard({ currentUser }) {
 
   // Navigation Tabs: 'upload' | 'access' | 'documents'
   const [activeTab, setActiveTab] = useState('upload');
+  const [showFormatsModal, setShowFormatsModal] = useState(false);
 
   // Auth Redirect State
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
@@ -540,6 +544,9 @@ export default function VaultDashboard({ currentUser }) {
     if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext) || mime?.includes('image')) {
       return <FileImage className="w-5 h-5 text-rose-400" />;
     }
+    if (['mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'webm', 'wma'].includes(ext) || mime?.includes('audio')) {
+      return <Music className="w-5 h-5 text-cyan-400" />;
+    }
     if (['pdf'].includes(ext) || mime?.includes('pdf')) {
       return <FileText className="w-5 h-5 text-red-500" />;
     }
@@ -868,12 +875,35 @@ export default function VaultDashboard({ currentUser }) {
                           </span>
                           <span className="text-sm text-zinc-300"> or drag & drop here</span>
                         </div>
-                        <p className="text-xs text-zinc-500">
-                          Supports PDF, Word, Excel, Images, Code, and Archives (Up to 20 files)
+                        <p className="text-xs text-zinc-400">
+                          Supports PDF, Word, Excel, Images, Audio, Code, and Archives (Up to 20 files)
                         </p>
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400 font-mono">
-                          <Archive className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Auto-packaged into unified ZIP</span>
+                        <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-950/40 border border-red-800/40 text-red-300 text-[10px] font-medium">
+                            👁️ Vision OCR
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 text-[10px] font-medium">
+                            🎙️ Whisper Audio
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/40 border border-amber-800/40 text-amber-300 text-[10px] font-medium">
+                            📦 ZIP Deep Scan
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/40 border border-emerald-800/40 text-emerald-300 text-[10px] font-medium">
+                            📊 Excel Tables
+                          </span>
+                        </div>
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowFormatsModal(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 text-[11px] text-[#E11D2E] hover:text-[#FF2E44] hover:underline font-medium transition-all cursor-pointer"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5" />
+                            <span>Supported Formats & AI Capabilities Guide</span>
+                          </button>
                         </div>
                       </div>
                     ) : (
@@ -1461,10 +1491,19 @@ export default function VaultDashboard({ currentUser }) {
                 <button
                   type="button"
                   onClick={() => setAiModalDoc(unlockedDoc)}
-                  className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-red-950/80 via-zinc-900 to-red-950/60 hover:from-red-900 hover:to-zinc-800 border border-[#E11D2E]/40 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-red-950/30 group"
+                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-red-950/80 via-zinc-900 to-red-950/60 hover:from-red-900 hover:to-zinc-800 border border-[#E11D2E]/40 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-red-950/30 group"
                 >
                   <Sparkles className="w-4 h-4 text-[#E11D2E] group-hover:rotate-12 transition-transform" />
-                  <span>✨ Open DocQevrilo AI Study Assistant</span>
+                  <span>
+                    ✨ Open DocQevrilo AI Assistant
+                    {unlockedDoc?.original_name?.match(/\.(png|jpg|jpeg|webp|gif|bmp|svg)$/i)
+                      ? ' (Vision OCR)'
+                      : unlockedDoc?.original_name?.match(/\.(mp3|wav|m4a|ogg|flac|aac|webm)$/i)
+                      ? ' (Whisper Audio)'
+                      : unlockedDoc?.original_name?.endsWith('.zip')
+                      ? ' (Archive Deep Scan)'
+                      : ''}
+                  </span>
                 </button>
 
                 {/* Preview Drawer Toggle */}
@@ -1644,6 +1683,12 @@ export default function VaultDashboard({ currentUser }) {
           accessCode={aiModalDoc.enteredCode || accessCodeInput.trim() || ''}
         />
       )}
+
+      {/* Supported Formats & AI Capabilities Guide Modal */}
+      <SupportedFormatsModal
+        isOpen={showFormatsModal}
+        onClose={() => setShowFormatsModal(false)}
+      />
     </div>
   );
 }

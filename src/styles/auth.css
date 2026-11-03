@@ -281,8 +281,58 @@
 .sv-auth-container {
   max-width: 480px;
   width: 100%;
-  margin: 3.5rem auto 4.5rem;
+  margin: 2.75rem auto 4.5rem;
   padding: 0 1.25rem;
+}
+
+/* Back to Home Navigation */
+.sv-auth-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #a1a1aa;
+  text-decoration: none;
+  font-size: 0.84rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  padding: 6px 12px 6px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  width: fit-content;
+}
+
+.sv-auth-back-link:hover {
+  color: #ffffff;
+  background: rgba(229, 9, 42, 0.12);
+  border-color: rgba(229, 9, 42, 0.4);
+  transform: translateX(-3px);
+}
+
+.sv-auth-back-link .sv-back-arrow {
+  color: #E11D2E;
+  transition: transform 0.2s ease;
+}
+
+.sv-auth-back-link:hover .sv-back-arrow {
+  transform: translateX(-2px);
+}
+
+.sv-auth-home-return-link {
+  color: #a1a1aa;
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sv-auth-home-return-link:hover {
+  color: #ffffff;
+  text-decoration: underline;
 }
 
 .sv-auth-card {

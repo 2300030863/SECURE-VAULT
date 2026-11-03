@@ -21,6 +21,7 @@ import {
   Sliders,
   EyeOff,
   Sparkles,
+  Music,
   Search,
   Filter,
   ArrowUpDown,
@@ -124,6 +125,9 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth, onDocum
     }
     if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext) || mime?.includes('image')) {
       return <FileImage className="w-4 h-4 text-rose-400" />;
+    }
+    if (['mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'webm', 'wma'].includes(ext) || mime?.includes('audio')) {
+      return <Music className="w-4 h-4 text-cyan-400" />;
     }
     if (['pdf'].includes(ext) || mime?.includes('pdf')) {
       return <FileText className="w-4 h-4 text-red-500" />;
@@ -775,7 +779,16 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth, onDocum
                   title="Summarize document, ask AI questions, and generate quizzes"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-[#E11D2E] group-hover:rotate-12 transition-transform" />
-                  <span>✨ Ask AI & Summarize</span>
+                  <span>
+                    ✨ Ask AI & Summarize
+                    {doc.original_name?.match(/\.(png|jpg|jpeg|webp|gif|bmp|svg)$/i)
+                      ? ' · Vision OCR'
+                      : doc.original_name?.match(/\.(mp3|wav|m4a|ogg|flac|aac|webm)$/i)
+                      ? ' · Whisper'
+                      : doc.original_name?.endsWith('.zip')
+                      ? ' · Archive'
+                      : ''}
+                  </span>
                 </button>
 
                 {/* Inline Preview Drawer */}

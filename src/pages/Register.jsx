@@ -5,6 +5,8 @@ import {
   Mail,
   Shield,
   ArrowRight,
+  ArrowLeft,
+  Home,
   Briefcase,
   KeyRound,
   Check,
@@ -320,6 +322,12 @@ export default function Register() {
   return (
     <div className="sv-page-wrapper">
       <div className="sv-auth-container">
+        {/* Back to Home Navigation */}
+        <Link to="/" className="sv-auth-back-link" title="Return to DocQevrilo Home">
+          <ArrowLeft size={16} className="sv-back-arrow" />
+          <span>Back to Home</span>
+        </Link>
+
         <GlassCard highlightCrimson className="sv-auth-card">
           {/* Header */}
           <div className="sv-auth-header">
@@ -811,6 +819,13 @@ export default function Register() {
             Already have an account?{' '}
             <Link to="/login" className="sv-link-accent">
               Sign in
+            </Link>
+          </div>
+
+          <div style={{ marginTop: '1.25rem', textAlign: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '1rem' }}>
+            <Link to="/" className="sv-auth-home-return-link" title="Return to DocQevrilo Home">
+              <Home size={14} className="text-[#E11D2E]" />
+              <span>Return to Home Page</span>
             </Link>
           </div>
         </GlassCard>

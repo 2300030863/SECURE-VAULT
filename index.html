@@ -2,13 +2,71 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23E11D2E'><path d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z'/></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="DocQevrilo — A smarter way to share documents securely. Upload and share documents using unique access codes without needing WhatsApp or Telegram groups." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23E11D2E'><path d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z'/></svg>" />
+
+    <!-- Search Engine Indexing & Title -->
+    <title>DocQevrilo — Secure Document Vault & Private Cloud Sharing</title>
+    <meta name="title" content="DocQevrilo — Secure Document Vault & Private Cloud Sharing" />
+    <meta name="description" content="DocQevrilo is a zero-knowledge document sharing platform and AI study assistant developed by Kommalapati Sivesh. One code. Simple, private, encrypted sharing." />
+    <meta name="keywords" content="DocQevrilo, Doc Qevrilo, DocQevrilo Platform, secure vault, document sharing, zero knowledge, Kommalapati Sivesh, AI document assistant, encrypted file sharing, Groq AI, private object storage" />
+    <meta name="author" content="Kommalapati Sivesh" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <link rel="canonical" href="https://secure-vault-delta-virid.vercel.app/" />
+
+    <!-- Open Graph / Facebook / WhatsApp -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://secure-vault-delta-virid.vercel.app/" />
+    <meta property="og:title" content="DocQevrilo — Secure Document Vault & Private Cloud Sharing" />
+    <meta property="og:description" content="DocQevrilo is a zero-knowledge document sharing platform and AI study assistant. One code. Simple, encrypted sharing." />
+    <meta property="og:site_name" content="DocQevrilo" />
+    <meta property="og:image" content="https://secure-vault-delta-virid.vercel.app/images/welcome/hero-dashboard-preview.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="DocQevrilo Workspace Dashboard" />
+
+    <!-- Twitter Card -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://secure-vault-delta-virid.vercel.app/" />
+    <meta property="twitter:title" content="DocQevrilo — Secure Document Vault & Private Cloud Sharing" />
+    <meta property="twitter:description" content="DocQevrilo is a zero-knowledge document sharing platform and AI study assistant. One code. Simple, encrypted sharing." />
+    <meta property="twitter:image" content="https://secure-vault-delta-virid.vercel.app/images/welcome/hero-dashboard-preview.png" />
+
+    <!-- Google Web Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <title>DocQevrilo — Secure Document Sharing Platform | One Code. Simple Sharing.</title>
+
+    <!-- Structured Data (JSON-LD) for Search Engines (Google, Bing) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://secure-vault-delta-virid.vercel.app/#website",
+          "url": "https://secure-vault-delta-virid.vercel.app/",
+          "name": "DocQevrilo",
+          "alternateName": ["Doc Qevrilo", "DocQevrilo Platform", "DocQevrilo Secure Vault"],
+          "description": "A smarter, zero-knowledge way to share documents securely with single-use cryptographic access codes.",
+          "author": {
+            "@type": "Person",
+            "name": "Kommalapati Sivesh",
+            "url": "https://kommalaptisivesh.me"
+          }
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://secure-vault-delta-virid.vercel.app/#app",
+          "url": "https://secure-vault-delta-virid.vercel.app/",
+          "name": "DocQevrilo",
+          "applicationCategory": "SecurityApplication",
+          "operatingSystem": "All",
+          "description": "Zero-knowledge document workspace with AI study assistant, Groq Vision OCR, Whisper audio transcription, and encrypted access codes."
+        }
+      ]
+    }
+    </script>
   </head>
   <body class="bg-[#0B0B0D] text-[#ECECF1] antialiased selection:bg-[#E11D2E] selection:text-white min-h-screen">
     <div id="root"></div>

@@ -964,7 +964,7 @@ export default function Welcome({ currentUser }) {
               </li>
               <li>
                 <CheckCircle2 size={15} className="text-emerald-400 shrink-0 mt-0.5" />
-                <span><strong>AI Document Assistant:</strong> Generate instant summaries and insights on uploaded documents.</span>
+                <span><strong>Multimodal Groq AI Assistant:</strong> Summarize and analyze documents, extract diagrams & OCR text from images (Groq Vision), transcribe audio recordings (Groq Whisper), and scan nested ZIP archives.</span>
               </li>
             </ul>
           </div>

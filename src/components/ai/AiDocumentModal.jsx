@@ -72,6 +72,63 @@ export default function AiDocumentModal({ isOpen, onClose, doc, accessCode = '' 
     }
   }, [isOpen, doc, activeTab]);
 
+  // Dynamic media badges and contextual prompts based on file type
+  const getMediaBadge = () => {
+    const name = (doc?.original_name || '').toLowerCase();
+    const mime = (doc?.mime_type || '').toLowerCase();
+    if (name.endsWith('.zip') || mime.includes('zip')) {
+      return { icon: '📦', label: 'Archive Deep Scan' };
+    }
+    if (name.match(/\.(png|jpg|jpeg|webp|gif|bmp|svg)$/) || mime.startsWith('image/')) {
+      return { icon: '👁️', label: 'Groq Vision OCR' };
+    }
+    if (name.match(/\.(mp3|wav|m4a|ogg|flac|aac|webm|wma)$/) || mime.startsWith('audio/')) {
+      return { icon: '🎙️', label: 'Whisper Audio Transcription' };
+    }
+    if (name.match(/\.(xlsx|xls|csv)$/) || mime.includes('spreadsheet') || mime.includes('excel')) {
+      return { icon: '📊', label: 'Spreadsheet Analytics' };
+    }
+    return { icon: '📄', label: 'Document Assistant' };
+  };
+
+  const getQuickPrompts = () => {
+    const name = (doc?.original_name || '').toLowerCase();
+    const mime = (doc?.mime_type || '').toLowerCase();
+    if (name.match(/\.(png|jpg|jpeg|webp|gif|bmp|svg)$/) || mime.startsWith('image/')) {
+      return [
+        'Transcribe all readable text, labels, and numbers from this image.',
+        'Describe the diagram, UI structure, or visual components in detail.',
+        'What are the key insights and takeaways from this image?',
+        'Give me 5 study or revision questions based on this image content.',
+      ];
+    }
+    if (name.match(/\.(mp3|wav|m4a|ogg|flac|aac|webm|wma)$/) || mime.startsWith('audio/')) {
+      return [
+        'Summarize the core topics and discussions in this audio recording.',
+        'Extract an action item list or key decisions from the speech.',
+        'What were the main questions or ideas highlighted in this track?',
+        'Provide a chronological breakdown of the topics mentioned.',
+      ];
+    }
+    if (name.endsWith('.zip') || mime.includes('zip')) {
+      return [
+        'List and summarize all files contained in this archive.',
+        'What are the key concepts across all documents in this bundle?',
+        'Highlight critical formulas, code snippets, or definitions.',
+        'Generate an exhaustive study guide combining all archive files.',
+      ];
+    }
+    return [
+      'Explain the main topic of this document in simple English.',
+      'What are the core differences between the main concepts?',
+      'Give me 5 important exam questions based on this document.',
+      'Summarize the formulas, theorems, and definitions mentioned.',
+    ];
+  };
+
+  const mediaBadge = getMediaBadge();
+  const quickPrompts = getQuickPrompts();
+
   // Scroll chat to bottom
   useEffect(() => {
     if (activeTab === 'chat') {
@@ -228,12 +285,16 @@ export default function AiDocumentModal({ isOpen, onClose, doc, accessCode = '' 
               <Sparkles className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
                   {doc.original_name || 'Document Assistant'}
                 </h3>
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-950/80 text-red-300 border border-red-800/40 shrink-0 capitalize">
                   ⚡ Groq {aiStatus?.model ? aiStatus.model.split('/').pop().replace(/-/g, ' ') : 'AI Active'}
+                </span>
+                <span className="inline-flex text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 shrink-0 items-center gap-1">
+                  <span>{mediaBadge.icon}</span>
+                  <span>{mediaBadge.label}</span>
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400">
@@ -448,12 +509,7 @@ export default function AiDocumentModal({ isOpen, onClose, doc, accessCode = '' 
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-                    {[
-                      'Explain the main topic of this document in simple English.',
-                      'What are the core differences between the main concepts?',
-                      'Give me 5 important exam questions based on this document.',
-                      'Summarize the formulas, theorems, and definitions mentioned.',
-                    ].map((prompt, idx) => (
+                    {quickPrompts.map((prompt, idx) => (
                       <button
                         key={idx}
                         type="button"
