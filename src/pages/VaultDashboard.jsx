@@ -250,6 +250,7 @@ export default function VaultDashboard({ currentUser }) {
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [unlockedDoc, setUnlockedDoc] = useState(null);
+  const [unlockedLiveShareCode, setUnlockedLiveShareCode] = useState(null);
   const [accessError, setAccessError] = useState('');
 
   // Auto-fill code from URL query param if present (?code=ABC or ?tab=online-share)
@@ -672,6 +673,7 @@ export default function VaultDashboard({ currentUser }) {
     setIsVerifying(true);
     setAccessError('');
     setUnlockedDoc(null);
+    setUnlockedLiveShareCode(null);
     setShowInlinePreview(false);
 
     try {
@@ -689,7 +691,8 @@ export default function VaultDashboard({ currentUser }) {
 
       // If the code belongs to a Live Online Share session
       if (data.isOnlineLiveShare) {
-        navigate(`/online-share?code=${encodeURIComponent(data.access_code || accessCodeInput.trim())}`);
+        setUnlockedLiveShareCode(data.access_code || accessCodeInput.trim().toUpperCase());
+        setUnlockedDoc(null);
         return;
       }
 
@@ -1432,6 +1435,8 @@ export default function VaultDashboard({ currentUser }) {
                       <span className="text-[11px] text-zinc-400 block truncate">
                         {storageMode === 'temporary'
                           ? `Temporary Auto-Purge (${expiryOption})`
+                          : storageMode === 'online'
+                          ? `Live Online P2P · ${expiryOption} window · ${maxDownloads === 'unlimited' ? 'Unlimited' : `${maxDownloads} recipients`} · Zero Cloud`
                           : 'Long-Term Storage · Permanent retention'}
                       </span>
                     </div>
@@ -1439,7 +1444,7 @@ export default function VaultDashboard({ currentUser }) {
 
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300">
-                      {storageMode === 'temporary' ? 'Temp Auto-Purge' : 'Long-Term'}
+                      {storageMode === 'temporary' ? 'Temp Auto-Purge' : storageMode === 'online' ? 'Live P2P' : 'Long-Term'}
                     </span>
                     {showSettingsAccordion ? (
                       <ChevronUp className="w-4 h-4 text-zinc-400" />
@@ -1561,6 +1566,22 @@ export default function VaultDashboard({ currentUser }) {
                   </div>
                 )}
 
+              {/* Online Sharing (Live P2P) Banner when storageMode === 'online' */}
+              {storageMode === 'online' && entryMode === 'file' && (
+                <div className="p-3.5 rounded-xl bg-red-950/20 border border-[#E11D2E]/40 text-xs text-zinc-300 space-y-1.5 animate-in fade-in duration-150">
+                  <div className="flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-[#E11D2E] animate-pulse shrink-0" />
+                    <span className="font-bold text-white">Live P2P Online Sharing</span>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-950/80 border border-[#E11D2E]/60 text-red-300">
+                      No 250MB Limit · Unlimited File Size
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    Files of any size (e.g. 3.8 GB, 10 GB+) stream directly from your browser memory to the recipient over encrypted WebRTC DataChannel. Zero cloud storage, zero disk writes, completely private.
+                  </p>
+                </div>
+              )}
+
               {/* Error Banner */}
               {uploadError && (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-300">
@@ -1605,7 +1626,7 @@ export default function VaultDashboard({ currentUser }) {
                 ) : storageMode === 'online' && entryMode === 'file' ? (
                   <>
                     <Radio className="w-4 h-4 text-white animate-pulse" />
-                    <span>Generate Access Code & Start Online Share</span>
+                    <span>Generate Access Code & Start Live Share (No Limit)</span>
                   </>
                 ) : (
                   <>
@@ -1714,8 +1735,9 @@ export default function VaultDashboard({ currentUser }) {
                     onChange={(e) => {
                       setAccessCodeInput(e.target.value.trim());
                       setAccessError('');
+                      if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
                     }}
-                    placeholder="Enter access code... (e.g. A1B95@3he5)"
+                    placeholder="Enter access code... (e.g. 6-char live code or 10-char vault code)"
                     className="w-full rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none transition-all pr-20"
                   />
                   <button
@@ -1723,7 +1745,10 @@ export default function VaultDashboard({ currentUser }) {
                     onClick={async () => {
                       try {
                         const text = await navigator.clipboard.readText();
-                        if (text) setAccessCodeInput(text.trim());
+                        if (text) {
+                          setAccessCodeInput(text.trim());
+                          if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
+                        }
                       } catch {}
                     }}
                     className="absolute right-2 top-2 px-2.5 py-1 text-xs font-mono text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 rounded-lg transition-all cursor-pointer"
@@ -1732,7 +1757,7 @@ export default function VaultDashboard({ currentUser }) {
                   </button>
                 </div>
                 <p className="text-[11px] text-zinc-500 mt-1.5">
-                  Format: 10 characters with secure hash lookup in TiDB Cloud
+                  Format: 6-character live code or 10-character vault code with secure hash verification in TiDB Cloud
                 </p>
               </div>
 
@@ -1769,6 +1794,29 @@ export default function VaultDashboard({ currentUser }) {
                 )}
               </button>
             </form>
+
+            {/* Live Online P2P Share Result View */}
+            {unlockedLiveShareCode && (
+              <div className="mt-6 p-5 rounded-2xl bg-[#0E0E10] border border-[#27272A] space-y-4 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between pb-3 border-b border-[#27272A]">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                    <Radio className="w-4 h-4 text-[#E11D2E] animate-pulse" />
+                    <span>Live P2P Online Share Active</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUnlockedLiveShareCode(null);
+                      setAccessCodeInput('');
+                    }}
+                    className="text-[11px] text-zinc-400 hover:text-white px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 transition-colors cursor-pointer"
+                  >
+                    Clear / Enter Another Code
+                  </button>
+                </div>
+                <OnlineLiveShare currentUser={currentUser} initialAccessCode={unlockedLiveShareCode} />
+              </div>
+            )}
 
             {/* Unlocked Document Result Card */}
             {unlockedDoc && (

@@ -67,11 +67,13 @@ export default function OnlineLiveShare({
   const webRtcSessionRef = useRef(null);
   const heartbeatTimerRef = useRef(null);
 
-  // Auto-fill initial access code if provided via props/URL
+  // Auto-fill initial access code if provided via props/URL and auto-connect
   useEffect(() => {
     if (initialAccessCode) {
-      setInputCode(initialAccessCode.trim().toUpperCase());
+      const code = initialAccessCode.trim().toUpperCase();
+      setInputCode(code);
       setActiveMode('recipient');
+      handleConnectRecipient(null, code);
     }
   }, [initialAccessCode]);
 
@@ -355,9 +357,9 @@ export default function OnlineLiveShare({
    * 2. If owner is offline, immediately shows clear error.
    * 3. If online, initiates WebRTC DataChannel receiver.
    */
-  const handleConnectRecipient = async (e) => {
-    if (e) e.preventDefault();
-    const cleanCode = inputCode.trim().toUpperCase();
+  const handleConnectRecipient = async (e, codeOverride = null) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const cleanCode = (codeOverride || inputCode || '').trim().toUpperCase();
 
     if (!cleanCode || cleanCode.length < 4) {
       setRecipientError('Please enter a valid access code.');
