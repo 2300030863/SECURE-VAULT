@@ -19,6 +19,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { getApiBaseUrl } from '../../config/api';
+import { authService } from '../../services/authService';
 import { WebRtcShareSession, formatFileSize } from '../../services/webRtcShareService';
 
 export default function OnlineLiveShare({
@@ -72,11 +73,11 @@ export default function OnlineLiveShare({
     if (initialFile) {
       setSelectedFile(initialFile);
       setActiveMode('owner');
-      if (autoStart && currentUser) {
+      if (autoStart) {
         handleStartLiveShare(initialFile);
       }
     }
-  }, [initialFile, autoStart, currentUser]);
+  }, [initialFile, autoStart]);
 
   // ---------------------------------------------------------------------------
   // Browser Unload Protection: End session when tab closes
@@ -140,22 +141,17 @@ export default function OnlineLiveShare({
       return;
     }
 
-    if (!currentUser) {
-      setOwnerError('You must be signed in to create an Online Share session.');
-      return;
-    }
-
     setIsCreatingSession(true);
     setOwnerError(null);
     setOwnerProgress(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const authHeaders = authService.getAuthHeaders();
       const res = await fetch(`${getApiBaseUrl()}/online-share/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...authHeaders,
         },
         body: JSON.stringify({
           fileName: fileToUse.name,
@@ -517,12 +513,21 @@ export default function OnlineLiveShare({
           {!activeSession ? (
             // Phase 1: File Selection & Generate Access Code
             <div className="space-y-5">
-              {!currentUser && (
-                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2.5">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>
-                    You must be logged in to host a live share. Please sign in or register to generate an access code.
-                  </span>
+              {!currentUser ? (
+                <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 text-zinc-400 text-xs flex items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-[#E11D2E] shrink-0" />
+                    <span>Live P2P Mode: Direct browser-to-browser encrypted memory stream.</span>
+                  </div>
+                  <span className="text-[10px] bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full font-mono shrink-0">Guest Allowed</span>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-red-950/20 border border-red-900/30 text-xs text-zinc-300 flex items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-[#E11D2E] shrink-0" />
+                    <span>Hosting session as <span className="text-white font-medium">{currentUser.email || currentUser.fullName}</span></span>
+                  </div>
+                  <span className="text-[10px] bg-red-950 text-red-300 border border-red-800/40 px-2 py-0.5 rounded-full font-mono shrink-0">Authenticated</span>
                 </div>
               )}
 
@@ -583,7 +588,7 @@ export default function OnlineLiveShare({
               <button
                 type="button"
                 onClick={handleStartLiveShare}
-                disabled={!selectedFile || isCreatingSession || !currentUser}
+                disabled={!selectedFile || isCreatingSession}
                 className="w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-[#E11D2E] hover:bg-[#c91827] text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-950/40 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isCreatingSession ? (
