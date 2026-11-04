@@ -28,6 +28,7 @@ import {
   Clipboard,
   FileCode,
   Cloud,
+  Radio,
   Trash2,
   Eye,
   Archive,
@@ -53,6 +54,7 @@ import TemporaryStorageSettings from '../components/sharing/TemporaryStorageSett
 import MySharedDocuments from '../components/sharing/MySharedDocuments';
 import AiDocumentModal from '../components/ai/AiDocumentModal';
 import SupportedFormatsModal from '../components/SupportedFormatsModal';
+import OnlineLiveShare from '../components/sharing/OnlineLiveShare';
 
 export default function VaultDashboard({ currentUser }) {
   const navigate = useNavigate();
@@ -115,12 +117,20 @@ export default function VaultDashboard({ currentUser }) {
   const [unlockedDoc, setUnlockedDoc] = useState(null);
   const [accessError, setAccessError] = useState('');
 
-  // Auto-fill code from URL query param if present (?code=ABC or ?c=ABC)
+  // Auto-fill code from URL query param if present (?code=ABC or ?c=ABC or ?tab=live-share)
   useEffect(() => {
+    const tabFromUrl = searchParams.get('tab');
+    if (tabFromUrl === 'live-share' || tabFromUrl === 'online-share') {
+      setActiveTab('live-share');
+    }
     const codeFromUrl = searchParams.get('code') || searchParams.get('c');
     if (codeFromUrl && codeFromUrl.trim()) {
-      setAccessCodeInput(codeFromUrl.trim());
-      setActiveTab('access');
+      if (tabFromUrl === 'live-share' || tabFromUrl === 'online-share') {
+        setActiveTab('live-share');
+      } else {
+        setAccessCodeInput(codeFromUrl.trim());
+        setActiveTab('access');
+      }
     }
   }, [searchParams]);
 
@@ -743,6 +753,22 @@ export default function VaultDashboard({ currentUser }) {
             <KeyRound className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
             <span className="tab-label-full">Unlock Code</span>
             <span className="tab-label-short">Unlock</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'live-share'}
+            onClick={() => setActiveTab('live-share')}
+            className={`vault-tab-btn ${activeTab === 'live-share' ? 'active' : ''}`}
+            title="Live Online P2P Share"
+          >
+            <Radio className="w-3.5 h-3.5 shrink-0 text-[#E11D2E]" />
+            <span className="tab-label-full">Live Share</span>
+            <span className="tab-label-short">Live</span>
+            <span className="vault-tab-badge" style={{ background: '#b91c1c', color: '#fff', fontSize: '9px', padding: '1px 5px' }}>
+              P2P
+            </span>
           </button>
 
           {currentUser && (
@@ -1532,6 +1558,16 @@ export default function VaultDashboard({ currentUser }) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tab: Live Temporary Online Sharing (Memory-to-Memory WebRTC Stream) */}
+        {activeTab === 'live-share' && (
+          <div className="animate-in fade-in duration-150 w-full">
+            <OnlineLiveShare
+              currentUser={currentUser}
+              initialAccessCode={searchParams.get('code') || ''}
+            />
           </div>
         )}
 

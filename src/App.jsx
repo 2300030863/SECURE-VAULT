@@ -21,6 +21,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VaultDashboard from './pages/VaultDashboard';
+import OnlineShare from './pages/OnlineShare';
 import NotFound from './pages/NotFound';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
@@ -164,6 +165,8 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/vault" element={<VaultDashboard currentUser={currentUser} />} />
+            <Route path="/online-share" element={<OnlineShare currentUser={currentUser} />} />
+            <Route path="/live-share" element={<OnlineShare currentUser={currentUser} />} />
             <Route path="/dashboard" element={<Navigate to="/vault" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
