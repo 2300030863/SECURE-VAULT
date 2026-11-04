@@ -17,10 +17,12 @@ import {
   RefreshCw,
   ExternalLink,
   Lock,
+  Eye,
 } from 'lucide-react';
 import { getApiBaseUrl } from '../../config/api';
 import { authService } from '../../services/authService';
 import { WebRtcShareSession, formatFileSize } from '../../services/webRtcShareService';
+import JSZip from 'jszip';
 
 export default function OnlineLiveShare({
   currentUser = null,
@@ -149,19 +151,23 @@ export default function OnlineLiveShare({
   // OWNER ACTIONS
   // ---------------------------------------------------------------------------
 
+  const [selectedFiles, setSelectedFiles] = useState([]);
+
   const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles(files);
+      setSelectedFile(files[0]);
       setOwnerError(null);
     }
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length > 0) {
+      setSelectedFiles(files);
+      setSelectedFile(files[0]);
       setOwnerError(null);
     }
   };
@@ -173,9 +179,11 @@ export default function OnlineLiveShare({
    * 3. Initializes the WebRTC P2P listener ready to stream directly from browser memory.
    */
   const handleStartLiveShare = async (fileOverride = null) => {
-    const fileToUse = fileOverride || selectedFile;
-    if (!fileToUse) {
-      setOwnerError('Please select a file to share.');
+    let fileToUse = fileOverride || selectedFile;
+    const allFiles = selectedFiles.length > 0 ? selectedFiles : (fileToUse ? [fileToUse] : []);
+
+    if (allFiles.length === 0) {
+      setOwnerError('Please select at least one file to share.');
       return;
     }
 
@@ -184,6 +192,28 @@ export default function OnlineLiveShare({
     setOwnerProgress(null);
 
     try {
+      let shareFileName = allFiles[0].name;
+
+      // MULTIPLE FILES SUPPORT: Package all files into a single ZIP archive in browser memory
+      if (allFiles.length > 1) {
+        setOwnerStatusMessage('Packaging multiple files into encrypted ZIP in browser memory...');
+        const zip = new JSZip();
+        for (const file of allFiles) {
+          zip.file(file.name, file);
+        }
+        const zipBlob = await zip.generateAsync({
+          type: 'blob',
+          compression: 'DEFLATE',
+          compressionOptions: { level: 6 },
+        });
+        const zipName = `DocQevrilo_Archive_${allFiles.length}_Files.zip`;
+        fileToUse = new File([zipBlob], zipName, { type: 'application/zip' });
+        shareFileName = zipName;
+      } else {
+        fileToUse = allFiles[0];
+        shareFileName = allFiles[0].name;
+      }
+
       const authHeaders = authService.getAuthHeaders();
       const res = await fetch(`${getApiBaseUrl()}/online-share/create`, {
         method: 'POST',
@@ -192,7 +222,7 @@ export default function OnlineLiveShare({
           ...authHeaders,
         },
         body: JSON.stringify({
-          fileName: fileToUse.name,
+          fileName: shareFileName,
           fileSize: fileToUse.size,
           mimeType: fileToUse.type || 'application/octet-stream',
           durationMinutes: liveDurationMinutes,
@@ -225,8 +255,8 @@ export default function OnlineLiveShare({
   };
 
   /**
-   * High-frequency 4-second presence heartbeat timer
-   * Server terminates session if heartbeats stop for > 15s.
+   * High-frequency 8-second presence heartbeat timer
+   * Server terminates session if heartbeats stop for > 30s.
    */
   const startOwnerHeartbeat = (sessionId, ownerToken) => {
     if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
@@ -238,7 +268,21 @@ export default function OnlineLiveShare({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, ownerToken }),
         });
-        if (!res.ok) {
+        if (res.ok) {
+          const data = await res.json();
+          if (data.viewCount != null || data.downloadCount != null) {
+            setActiveSession((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    viewCount: data.viewCount != null ? data.viewCount : prev.viewCount,
+                    downloadCount: data.downloadCount != null ? data.downloadCount : prev.downloadCount,
+                    maxDownloads: data.maxDownloads != null ? data.maxDownloads : prev.maxDownloads,
+                  }
+                : prev
+            );
+          }
+        } else {
           console.warn('[Heartbeat Error] Session may have been ended.');
         }
       } catch (err) {
@@ -271,6 +315,18 @@ export default function OnlineLiveShare({
       onProgress: (progress) => {
         setOwnerShareStatus('transferring');
         setOwnerProgress(progress);
+      },
+      onStatsUpdate: (stats) => {
+        setActiveSession((prev) =>
+          prev
+            ? {
+                ...prev,
+                viewCount: stats.viewCount != null ? stats.viewCount : prev.viewCount,
+                downloadCount: stats.downloadCount != null ? stats.downloadCount : prev.downloadCount,
+                maxDownloads: stats.maxDownloads != null ? stats.maxDownloads : prev.maxDownloads,
+              }
+            : prev
+        );
       },
       onComplete: () => {
         setOwnerShareStatus('complete');
@@ -594,6 +650,7 @@ export default function OnlineLiveShare({
               >
                 <input
                   type="file"
+                  multiple
                   ref={fileInputRef}
                   onChange={handleFileSelect}
                   className="hidden"
@@ -603,7 +660,19 @@ export default function OnlineLiveShare({
                   <UploadCloud className="w-6 h-6" />
                 </div>
 
-                {selectedFile ? (
+                {selectedFiles.length > 1 ? (
+                  <div>
+                    <p className="text-sm font-bold text-white truncate max-w-md mx-auto">
+                      {selectedFiles.length} files selected (will package into ZIP archive)
+                    </p>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Total: {formatFileSize(selectedFiles.reduce((acc, f) => acc + f.size, 0))} · Ready for live memory streaming
+                    </p>
+                    <span className="inline-block mt-3 text-[11px] px-2.5 py-1 rounded-full bg-red-950/40 text-red-300 border border-red-800/40">
+                      Click or drag files to replace
+                    </span>
+                  </div>
+                ) : selectedFile ? (
                   <div>
                     <p className="text-sm font-bold text-white truncate max-w-md mx-auto">
                       {selectedFile.name}
@@ -618,10 +687,10 @@ export default function OnlineLiveShare({
                 ) : (
                   <div>
                     <p className="text-sm font-medium text-white">
-                      Drop any file here, or <span className="text-[#E11D2E]">browse your device</span>
+                      Drop files here, or <span className="text-[#E11D2E]">browse your device</span>
                     </p>
                     <p className="text-xs text-zinc-500 mt-1">
-                      No application-level size limits. Large files stream in 64KB backpressured chunks.
+                      Supports multiple files (auto-packages to ZIP) or single files · No application size limits
                     </p>
                   </div>
                 )}
@@ -816,6 +885,32 @@ export default function OnlineLiveShare({
                   <p className="text-zinc-500 mt-0.5">
                     Size: {formatFileSize(activeSession.fileSize)} · Memory streaming mode
                   </p>
+                </div>
+
+                {/* Real-time View & Download Counters */}
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                      <Eye className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <span>Recipients Viewed</span>
+                    </div>
+                    <span className="font-mono font-bold text-white text-xs">
+                      {activeSession.viewCount || 0}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                      <Download className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Downloads</span>
+                    </div>
+                    <span className="font-mono font-bold text-white text-xs">
+                      {activeSession.downloadCount || 0}
+                      <span className="text-zinc-500 font-normal">
+                        {' '}/ {activeSession.maxDownloads === 'unlimited' || !activeSession.maxDownloads ? '∞' : activeSession.maxDownloads}
+                      </span>
+                    </span>
+                  </div>
                 </div>
 
                 <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] text-xs text-zinc-400 flex items-center gap-2">

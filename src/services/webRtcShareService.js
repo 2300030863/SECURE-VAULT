@@ -41,6 +41,7 @@ export class WebRtcShareSession {
     onProgress = () => {},
     onComplete = () => {},
     onError = () => {},
+    onStatsUpdate = () => {},
   }) {
     this.role = role;
     this.sessionId = sessionId;
@@ -51,6 +52,7 @@ export class WebRtcShareSession {
     this.onProgress = onProgress;
     this.onComplete = onComplete;
     this.onError = onError;
+    this.onStatsUpdate = onStatsUpdate;
 
     this.peerConnection = null;
     this.dataChannel = null;
@@ -190,6 +192,15 @@ export class WebRtcShareSession {
         }
       });
 
+      this.sseSource.addEventListener('stats-updated', (event) => {
+        try {
+          const { payload } = JSON.parse(event.data);
+          if (this.onStatsUpdate && payload) {
+            this.onStatsUpdate(payload);
+          }
+        } catch (_) {}
+      });
+
       this.sseSource.addEventListener('session-ended', (event) => {
         let msg = 'The owner has ended the sharing session.';
         try {
@@ -241,6 +252,10 @@ export class WebRtcShareSession {
     } else if (type === 'candidate') {
       if (payload) {
         await this.handleCandidate(payload);
+      }
+    } else if (type === 'stats-updated') {
+      if (this.onStatsUpdate && payload) {
+        this.onStatsUpdate(payload);
       }
     } else if (type === 'session-ended') {
       this.onError('This shared file is no longer available. The owner has ended the sharing session.');
@@ -559,6 +574,18 @@ export class WebRtcShareSession {
           this.isTransferring = false;
           const mimeType = this.incomingFileInfo?.mimeType || 'application/octet-stream';
           const fileName = this.incomingFileInfo?.fileName || 'downloaded-file';
+
+          // Notify backend of completed download
+          try {
+            fetch(`${getApiBaseUrl()}/online-share/download-complete`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: this.sessionId,
+                recipientToken: this.token,
+              }),
+            }).catch(() => {});
+          } catch (_) {}
 
           if (this.fileWritableStream) {
             try {

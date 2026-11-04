@@ -56,6 +56,7 @@ import AiDocumentModal from '../components/ai/AiDocumentModal';
 import SupportedFormatsModal from '../components/SupportedFormatsModal';
 import OnlineLiveShare from '../components/sharing/OnlineLiveShare';
 import { WebRtcShareSession, formatFileSize } from '../services/webRtcShareService';
+import JSZip from 'jszip';
 
 export default function VaultDashboard({ currentUser }) {
   const navigate = useNavigate();
@@ -172,7 +173,7 @@ export default function VaultDashboard({ currentUser }) {
     if (liveHeartbeatRef.current) clearInterval(liveHeartbeatRef.current);
     liveHeartbeatRef.current = setInterval(async () => {
       try {
-        await fetch(apiUrl('/online-share/heartbeat'), {
+        const res = await fetch(apiUrl('/online-share/heartbeat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -180,6 +181,21 @@ export default function VaultDashboard({ currentUser }) {
             ownerToken: sessionData.ownerToken,
           }),
         });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.viewCount != null || data.downloadCount != null) {
+            setActiveLiveSession((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    viewCount: data.viewCount != null ? data.viewCount : prev.viewCount,
+                    downloadCount: data.downloadCount != null ? data.downloadCount : prev.downloadCount,
+                    maxDownloads: data.maxDownloads != null ? data.maxDownloads : prev.maxDownloads,
+                  }
+                : prev
+            );
+          }
+        }
       } catch (_) {}
     }, 8000);
 
@@ -197,6 +213,18 @@ export default function VaultDashboard({ currentUser }) {
       onProgress: (progress) => {
         setLiveShareStatus('transferring');
         setLiveShareProgress(progress);
+      },
+      onStatsUpdate: (stats) => {
+        setActiveLiveSession((prev) =>
+          prev
+            ? {
+                ...prev,
+                viewCount: stats.viewCount != null ? stats.viewCount : prev.viewCount,
+                downloadCount: stats.downloadCount != null ? stats.downloadCount : prev.downloadCount,
+                maxDownloads: stats.maxDownloads != null ? stats.maxDownloads : prev.maxDownloads,
+              }
+            : prev
+        );
       },
       onComplete: () => {
         setLiveShareStatus('complete');
@@ -489,6 +517,36 @@ export default function VaultDashboard({ currentUser }) {
       setIsStartingLiveShare(true);
       setUploadError('');
 
+      let fileToShare = selectedFiles[0];
+      let shareFileName = documentName.trim() || selectedFiles[0].name;
+
+      // MULTIPLE FILES SUPPORT: Package all files into a single ZIP archive in browser memory
+      if (selectedFiles.length > 1) {
+        try {
+          const zip = new JSZip();
+          for (const file of selectedFiles) {
+            zip.file(file.name, file);
+          }
+          const zipBlob = await zip.generateAsync({
+            type: 'blob',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 6 },
+          });
+          const customName = documentName.trim();
+          const zipName = customName
+            ? (customName.endsWith('.zip') ? customName : `${customName}.zip`)
+            : `DocQevrilo_Archive_${selectedFiles.length}_Files.zip`;
+
+          fileToShare = new File([zipBlob], zipName, { type: 'application/zip' });
+          shareFileName = zipName;
+        } catch (zipErr) {
+          console.error('[Browser ZIP Packaging Error]', zipErr);
+          setUploadError('Failed to package files into ZIP archive.');
+          setIsStartingLiveShare(false);
+          return;
+        }
+      }
+
       let durationMinutes = 120;
       if (expiryOption === '30m') durationMinutes = 30;
       else if (expiryOption === '1h') durationMinutes = 60;
@@ -505,9 +563,9 @@ export default function VaultDashboard({ currentUser }) {
             ...authService.getAuthHeaders(),
           },
           body: JSON.stringify({
-            fileName: selectedFiles[0].name,
-            fileSize: selectedFiles[0].size,
-            mimeType: selectedFiles[0].type || 'application/octet-stream',
+            fileName: shareFileName,
+            fileSize: fileToShare.size,
+            mimeType: fileToShare.type || 'application/octet-stream',
             durationMinutes,
             maxDownloads: maxDl,
             deleteAfterDownload: Boolean(deleteAfterDownload),
@@ -523,9 +581,12 @@ export default function VaultDashboard({ currentUser }) {
           sessionId: data.sessionId,
           accessCode: data.accessCode,
           ownerToken: data.ownerToken,
-          file: selectedFiles[0],
-          fileName: selectedFiles[0].name,
-          fileSize: selectedFiles[0].size,
+          file: fileToShare,
+          fileName: shareFileName,
+          fileSize: fileToShare.size,
+          viewCount: data.viewCount || 0,
+          downloadCount: data.downloadCount || 0,
+          maxDownloads: data.maxDownloads || maxDl,
           expiresAt: data.expiresAt,
         });
       } catch (err) {
@@ -1104,6 +1165,32 @@ export default function VaultDashboard({ currentUser }) {
                     <p className="text-zinc-500 mt-0.5">
                       Size: {formatFileSize(activeLiveSession.fileSize)} · Direct WebRTC memory stream
                     </p>
+                  </div>
+
+                  {/* Real-time View & Download Counters */}
+                  <div className="grid grid-cols-2 gap-2.5 pt-1">
+                    <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                        <Eye className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <span>Recipients Viewed</span>
+                      </div>
+                      <span className="font-mono font-bold text-white text-xs">
+                        {activeLiveSession.viewCount || 0}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                        <Download className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>Downloads</span>
+                      </div>
+                      <span className="font-mono font-bold text-white text-xs">
+                        {activeLiveSession.downloadCount || 0}
+                        <span className="text-zinc-500 font-normal">
+                          {' '}/ {activeLiveSession.maxDownloads === 'unlimited' || !activeLiveSession.maxDownloads ? '∞' : activeLiveSession.maxDownloads}
+                        </span>
+                      </span>
+                    </div>
                   </div>
 
                   <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] text-xs text-zinc-400 flex items-center gap-2">
