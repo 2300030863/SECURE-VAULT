@@ -67,13 +67,12 @@ export default function OnlineLiveShare({
   const webRtcSessionRef = useRef(null);
   const heartbeatTimerRef = useRef(null);
 
-  // Auto-fill initial access code if provided via props/URL and auto-connect
+  // Auto-fill initial access code if provided via props/URL
   useEffect(() => {
     if (initialAccessCode) {
       const code = initialAccessCode.trim().toUpperCase();
       setInputCode(code);
       setActiveMode('recipient');
-      handleConnectRecipient(null, code);
     }
   }, [initialAccessCode]);
 
@@ -987,16 +986,20 @@ export default function OnlineLiveShare({
                 <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-emerald-300 text-xs flex flex-col sm:flex-row items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <Check className="w-5 h-5 text-emerald-400 shrink-0" />
-                    <span>Download complete! The file has been saved to your device.</span>
+                    <div>
+                      <span className="font-bold text-white block">File Transfer Complete!</span>
+                      <span className="text-zinc-400">Streamed directly via WebRTC (Zero Cloud Storage).</span>
+                    </div>
                   </div>
 
                   {downloadedBlobUrl && (
                     <a
                       href={downloadedBlobUrl}
                       download={connectedFileData.fileName}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all whitespace-nowrap"
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition-all whitespace-nowrap cursor-pointer"
                     >
-                      Save Again
+                      <Download className="w-4 h-4" />
+                      <span>Download {connectedFileData.fileName}</span>
                     </a>
                   )}
                 </div>

@@ -58,6 +58,8 @@ export class WebRtcShareSession {
     this.pollInterval = null;
     this.isTransferring = false;
     this.isTerminated = false;
+    this.queuedIceCandidates = [];
+    this.isHandlingOffer = false;
 
     // Transfer stats
     this.bytesTransferred = 0;
@@ -180,8 +182,8 @@ export class WebRtcShareSession {
       this.sseSource.addEventListener('candidate', async (event) => {
         try {
           const { payload } = JSON.parse(event.data);
-          if (this.peerConnection && payload) {
-            await this.peerConnection.addIceCandidate(new RTCIceCandidate(payload));
+          if (payload) {
+            await this.handleCandidate(payload);
           }
         } catch (e) {
           console.error('[Signaling Candidate Parse Error]', e);
@@ -236,10 +238,10 @@ export class WebRtcShareSession {
       await this.handleOffer(payload);
     } else if (type === 'answer' && this.role === 'owner') {
       await this.handleAnswer(payload);
-    } else if (type === 'candidate' && this.peerConnection) {
-      try {
-        await this.peerConnection.addIceCandidate(new RTCIceCandidate(payload));
-      } catch (_) {}
+    } else if (type === 'candidate') {
+      if (payload) {
+        await this.handleCandidate(payload);
+      }
     } else if (type === 'session-ended') {
       this.onError('This shared file is no longer available. The owner has ended the sharing session.');
       this.close();
@@ -331,32 +333,122 @@ export class WebRtcShareSession {
     };
   }
 
+  async handleCandidate(candidate) {
+    if (!this.peerConnection || this.isTerminated || !candidate) return;
+    try {
+      if (!this.peerConnection.remoteDescription || !this.peerConnection.remoteDescription.type) {
+        if (!this.queuedIceCandidates) this.queuedIceCandidates = [];
+        this.queuedIceCandidates.push(candidate);
+      } else {
+        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    } catch (_) {}
+  }
+
   async createAndSendOffer() {
+    if (this.isTerminated || !this.peerConnection) return;
+
+    // 1. If dataChannel is already open or already transferring, ignore offer request
+    if (this.dataChannel && (this.dataChannel.readyState === 'open' || this.isTransferring)) {
+      console.log('[WebRTC Owner] DataChannel already open, skipping offer generation');
+      return;
+    }
+
+    // 2. Only create offer if signalingState is 'stable'
+    if (this.peerConnection.signalingState !== 'stable') {
+      console.log('[WebRTC Owner] Signaling state is not stable (' + this.peerConnection.signalingState + '), skipping createOffer');
+      return;
+    }
+
     try {
       const offer = await this.peerConnection.createOffer();
       await this.peerConnection.setLocalDescription(offer);
       await this.sendSignal('offer', offer);
     } catch (err) {
       console.error('[Create Offer Error]', err);
-      this.onError('Failed to generate WebRTC offer.');
+      if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
+        this.onError('Failed to generate WebRTC offer.');
+      }
     }
   }
 
   async handleOffer(offer) {
+    if (this.isTerminated || !this.peerConnection) return;
+
+    // 1. If dataChannel is already open or already transferring, ignore duplicate offer
+    if (this.dataChannel && (this.dataChannel.readyState === 'open' || this.isTransferring)) {
+      console.log('[WebRTC Recipient] DataChannel already active, ignoring duplicate offer');
+      return;
+    }
+
+    // 2. Prevent concurrent handleOffer execution
+    if (this.isHandlingOffer) {
+      console.log('[WebRTC Recipient] Already processing offer, ignoring concurrent offer');
+      return;
+    }
+
+    // 3. Check signaling state: only set remote offer if stable or have-local-pranswer
+    const state = this.peerConnection.signalingState;
+    if (state === 'have-remote-offer') {
+      console.log('[WebRTC Recipient] Already in have-remote-offer state, ignoring duplicate');
+      return;
+    }
+    if (state === 'closed') return;
+
+    this.isHandlingOffer = true;
     try {
-      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      const sdpData = offer && offer.sdp ? offer : (offer?.payload || offer);
+      if (!sdpData || !sdpData.sdp) {
+        console.warn('[WebRTC Recipient] Invalid offer SDP:', offer);
+        return;
+      }
+
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(sdpData));
+
+      // Flush queued candidates
+      if (this.queuedIceCandidates?.length) {
+        for (const cand of this.queuedIceCandidates) {
+          try {
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(cand));
+          } catch (_) {}
+        }
+        this.queuedIceCandidates = [];
+      }
+
       const answer = await this.peerConnection.createAnswer();
       await this.peerConnection.setLocalDescription(answer);
       await this.sendSignal('answer', answer);
     } catch (err) {
       console.error('[Handle Offer Error]', err);
-      this.onError('Failed to accept WebRTC offer.');
+      // Only emit error if connection is not already active
+      if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
+        this.onError('Failed to accept WebRTC offer.');
+      }
+    } finally {
+      this.isHandlingOffer = false;
     }
   }
 
   async handleAnswer(answer) {
+    if (this.isTerminated || !this.peerConnection) return;
+    if (this.peerConnection.signalingState !== 'have-local-offer') {
+      console.log('[WebRTC Owner] Ignoring answer: state is', this.peerConnection.signalingState);
+      return;
+    }
     try {
-      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      const sdpData = answer && answer.sdp ? answer : (answer?.payload || answer);
+      if (sdpData && sdpData.sdp) {
+        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(sdpData));
+        // Flush queued candidates
+        if (this.queuedIceCandidates?.length) {
+          for (const cand of this.queuedIceCandidates) {
+            try {
+              await this.peerConnection.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (_) {}
+          }
+          this.queuedIceCandidates = [];
+        }
+      }
     } catch (err) {
       console.error('[Handle Answer Error]', err);
     }
@@ -482,18 +574,7 @@ export class WebRtcShareSession {
           }
 
           const fileBlob = new Blob(this.receivedChunks, { type: mimeType });
-
-          // Auto-trigger download save in browser
           const blobUrl = URL.createObjectURL(fileBlob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(() => {
-            URL.revokeObjectURL(blobUrl);
-            a.remove();
-          }, 30000);
 
           this.onComplete({
             fileName,
