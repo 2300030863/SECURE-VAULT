@@ -30,3 +30,4 @@ export default function OnlineShare({ currentUser = null }) {
     </div>
   );
 }
+

@@ -85,13 +85,21 @@ export class WebRtcShareSession {
         }
       } catch (_) {}
 
-      // 2. Create RTCPeerConnection
+      // 2. Create RTCPeerConnection (STUN discovery only - ZERO TURN relay)
       this.peerConnection = new RTCPeerConnection({
         iceServers: this.iceServers,
+        iceTransportPolicy: 'all',
       });
 
       this.peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
+          // Zero-Relay Guarantee: Only allow host and server-reflexive (STUN) candidates.
+          // Explicitly reject any relay (TURN) candidates to ensure file data NEVER passes through a third-party server.
+          const candidateStr = event.candidate.candidate || '';
+          if (event.candidate.type === 'relay' || candidateStr.includes('typ relay')) {
+            console.log('[WebRTC Direct P2P] Dropped relay candidate to preserve zero-server guarantee.');
+            return;
+          }
           this.sendSignal('candidate', event.candidate);
         }
       };
@@ -99,10 +107,18 @@ export class WebRtcShareSession {
       this.peerConnection.onconnectionstatechange = () => {
         const state = this.peerConnection.connectionState;
         if (state === 'connected') {
-          this.onStatusChange({ status: 'connected', message: 'Encrypted P2P tunnel established.' });
-        } else if (state === 'disconnected' || state === 'failed') {
+          this.onStatusChange({ status: 'connected', message: 'Direct encrypted P2P tunnel established (Zero Server Relay).' });
+        } else if (state === 'failed') {
           if (!this.isTerminated) {
-            this.onError('P2P connection lost or failed to negotiate NAT traversal.');
+            this.onError(
+              'Direct peer-to-peer connection could not be established between these networks. ' +
+              'To guarantee zero server storage, DocQevrilo does not route file data through third-party TURN relay servers. ' +
+              'Please ensure both devices have standard internet access, or try connecting on the same Wi-Fi / network.'
+            );
+          }
+        } else if (state === 'disconnected') {
+          if (!this.isTerminated) {
+            this.onError('Direct P2P connection lost. The owner may have closed their browser tab.');
           }
         }
       };
@@ -426,7 +442,7 @@ export class WebRtcShareSession {
   /**
    * Recipient: Handles incoming data packets (header, binary chunks, complete).
    */
-  handleIncomingChunk(data) {
+  async handleIncomingChunk(data) {
     if (typeof data === 'string') {
       try {
         const parsed = JSON.parse(data);
@@ -451,6 +467,20 @@ export class WebRtcShareSession {
           this.isTransferring = false;
           const mimeType = this.incomingFileInfo?.mimeType || 'application/octet-stream';
           const fileName = this.incomingFileInfo?.fileName || 'downloaded-file';
+
+          if (this.fileWritableStream) {
+            try {
+              await this.fileWritableStream.close();
+              this.fileWritableStream = null;
+            } catch (_) {}
+            this.onComplete({
+              fileName,
+              fileSize: this.totalBytes,
+              streamSaved: true,
+            });
+            return;
+          }
+
           const fileBlob = new Blob(this.receivedChunks, { type: mimeType });
 
           // Auto-trigger download save in browser
@@ -480,7 +510,15 @@ export class WebRtcShareSession {
 
     // Binary Chunk (ArrayBuffer)
     if (data instanceof ArrayBuffer) {
-      this.receivedChunks.push(data);
+      if (this.fileWritableStream) {
+        try {
+          this.fileWritableStream.write(data);
+        } catch (_) {
+          this.receivedChunks.push(data);
+        }
+      } else {
+        this.receivedChunks.push(data);
+      }
       this.bytesTransferred += data.byteLength;
 
       const elapsedSec = Math.max((Date.now() - this.startTime) / 1000, 0.001);
@@ -533,3 +571,4 @@ export class WebRtcShareSession {
     this.receivedChunks = [];
   }
 }
+

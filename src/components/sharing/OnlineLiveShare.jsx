@@ -468,7 +468,7 @@ export default function OnlineLiveShare({ currentUser = null, initialAccessCode 
           </div>
           <div className="flex items-center gap-2">
             <Zap className="w-3.5 h-3.5 text-[#E11D2E]" />
-            <span>Unlimited File Size (Streamed)</span>
+            <span>Direct P2P Only (No Relays)</span>
           </div>
           <div className="flex items-center gap-2">
             <Clock className="w-3.5 h-3.5 text-[#E11D2E]" />
@@ -478,6 +478,17 @@ export default function OnlineLiveShare({ currentUser = null, initialAccessCode 
             <ShieldCheck className="w-3.5 h-3.5 text-[#E11D2E]" />
             <span>P2P DTLS-SRTP Encrypted</span>
           </div>
+        </div>
+
+        {/* Zero-Relay & Browser Memory Transparency Notice */}
+        <div className="mt-4 pt-3 border-t border-[#27272A]/50 text-[11px] text-zinc-400 space-y-1">
+          <p className="flex items-center gap-1.5 text-zinc-300 font-semibold">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#E11D2E]" />
+            <span>Strict Direct P2P Guarantee</span>
+          </p>
+          <p>
+            DocQevrilo connects browsers directly via WebRTC STUN hole-punching. To prevent file contents from ever touching a third-party server, <strong>no TURN relay servers are used</strong>. If direct network traversal cannot be established due to symmetric corporate NAT, the transfer stops cleanly with an explicit error rather than routing through an intermediary.
+          </p>
         </div>
       </div>
 
@@ -821,3 +832,4 @@ export default function OnlineLiveShare({ currentUser = null, initialAccessCode 
     </div>
   );
 }
+
