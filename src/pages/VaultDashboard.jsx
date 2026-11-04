@@ -50,10 +50,12 @@ import {
 } from 'lucide-react';
 import StorageModeSelector from '../components/sharing/StorageModeSelector';
 import TemporaryStorageSettings from '../components/sharing/TemporaryStorageSettings';
+import OnlineSharingSettings from '../components/sharing/OnlineSharingSettings';
 import MySharedDocuments from '../components/sharing/MySharedDocuments';
 import AiDocumentModal from '../components/ai/AiDocumentModal';
 import SupportedFormatsModal from '../components/SupportedFormatsModal';
 import OnlineLiveShare from '../components/sharing/OnlineLiveShare';
+import { WebRtcShareSession, formatFileSize } from '../services/webRtcShareService';
 
 export default function VaultDashboard({ currentUser }) {
   const navigate = useNavigate();
@@ -112,28 +114,156 @@ export default function VaultDashboard({ currentUser }) {
   const [showSettingsAccordion, setShowSettingsAccordion] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Live Online Sharing Session State
+  const [activeLiveSession, setActiveLiveSession] = useState(null); // { sessionId, accessCode, ownerToken, fileName, fileSize, expiresAt }
+  const [isStartingLiveShare, setIsStartingLiveShare] = useState(false);
+  const [liveShareStatus, setLiveShareStatus] = useState('idle'); // 'idle' | 'ready' | 'connecting' | 'transferring' | 'complete' | 'error'
+  const [liveShareStatusMessage, setLiveShareStatusMessage] = useState('');
+  const [liveShareProgress, setLiveShareProgress] = useState(null); // { percent, speedFormatted, bytesTransferred, totalBytes }
+  const [copiedLiveCode, setCopiedLiveCode] = useState(false);
+  const [copiedLiveLink, setCopiedLiveLink] = useState(false);
+  const liveHeartbeatRef = useRef(null);
+  const liveWebRtcRef = useRef(null);
+
+  // Clean up WebRTC and Heartbeat on unmount
+  useEffect(() => {
+    return () => {
+      if (liveHeartbeatRef.current) clearInterval(liveHeartbeatRef.current);
+      if (liveWebRtcRef.current) liveWebRtcRef.current.close();
+    };
+  }, []);
+
+  // Browser Unload / Page Hide Beacon to instantly end online share session
+  useEffect(() => {
+    const handleUnloadOrHide = () => {
+      if (activeLiveSession?.sessionId && activeLiveSession?.ownerToken) {
+        const payload = JSON.stringify({
+          sessionId: activeLiveSession.sessionId,
+          ownerToken: activeLiveSession.ownerToken,
+        });
+        try {
+          const blob = new Blob([payload], { type: 'application/json' });
+          navigator.sendBeacon(apiUrl('/online-share/end'), blob);
+        } catch (_) {}
+        try {
+          fetch(apiUrl('/online-share/end'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true,
+          }).catch(() => {});
+        } catch (_) {}
+      }
+    };
+
+    window.addEventListener('beforeunload', handleUnloadOrHide);
+    window.addEventListener('pagehide', handleUnloadOrHide);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnloadOrHide);
+      window.removeEventListener('pagehide', handleUnloadOrHide);
+    };
+  }, [activeLiveSession]);
+
+  const initOwnerLiveShare = (sessionData) => {
+    setActiveLiveSession(sessionData);
+    setLiveShareStatus('ready');
+    setLiveShareStatusMessage('Waiting for recipient to connect with access code...');
+
+    if (liveHeartbeatRef.current) clearInterval(liveHeartbeatRef.current);
+    liveHeartbeatRef.current = setInterval(async () => {
+      try {
+        await fetch(apiUrl('/online-share/heartbeat'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: sessionData.sessionId,
+            ownerToken: sessionData.ownerToken,
+          }),
+        });
+      } catch (_) {}
+    }, 8000);
+
+    if (liveWebRtcRef.current) liveWebRtcRef.current.close();
+    const rtcSession = new WebRtcShareSession({
+      role: 'owner',
+      sessionId: sessionData.sessionId,
+      token: sessionData.ownerToken,
+      file: sessionData.file,
+      onStatusChange: ({ status, message }) => {
+        setLiveShareStatusMessage(message);
+        if (status === 'recipient-connected') setLiveShareStatus('connecting');
+        else if (status === 'channel-open') setLiveShareStatus('transferring');
+      },
+      onProgress: (progress) => {
+        setLiveShareStatus('transferring');
+        setLiveShareProgress(progress);
+      },
+      onComplete: () => {
+        setLiveShareStatus('complete');
+        setLiveShareStatusMessage(
+          deleteAfterDownload
+            ? 'Transfer complete! Auto-ending session in 4 seconds (Burn on Finish)...'
+            : 'File transfer completed successfully!'
+        );
+        if (deleteAfterDownload) {
+          setTimeout(() => handleEndLiveShare(), 4000);
+        }
+      },
+      onError: (errMessage) => {
+        setUploadError(errMessage);
+        setLiveShareStatus('error');
+      },
+    });
+
+    liveWebRtcRef.current = rtcSession;
+    rtcSession.start();
+  };
+
+  const handleEndLiveShare = async () => {
+    if (liveHeartbeatRef.current) {
+      clearInterval(liveHeartbeatRef.current);
+      liveHeartbeatRef.current = null;
+    }
+    if (liveWebRtcRef.current) {
+      liveWebRtcRef.current.close();
+      liveWebRtcRef.current = null;
+    }
+    if (activeLiveSession?.sessionId && activeLiveSession?.ownerToken) {
+      try {
+        await fetch(apiUrl('/online-share/end'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: activeLiveSession.sessionId,
+            ownerToken: activeLiveSession.ownerToken,
+          }),
+        });
+      } catch (_) {}
+    }
+    setActiveLiveSession(null);
+    setLiveShareStatus('idle');
+    setLiveShareProgress(null);
+    setLiveShareStatusMessage('');
+  };
+
   // Access State
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [unlockedDoc, setUnlockedDoc] = useState(null);
   const [accessError, setAccessError] = useState('');
 
-  // Auto-fill code from URL query param if present (?code=ABC or ?c=ABC or ?tab=live-share)
+  // Auto-fill code from URL query param if present (?code=ABC or ?tab=online-share)
   useEffect(() => {
     const tabFromUrl = searchParams.get('tab');
-    if (tabFromUrl === 'live-share' || tabFromUrl === 'online-share' || tabFromUrl === 'live') {
+    if (tabFromUrl === 'live-share' || tabFromUrl === 'online-share' || tabFromUrl === 'live' || tabFromUrl === 'online') {
       setActiveTab('upload');
-      setEntryMode('live');
+      setEntryMode('file');
+      setStorageMode('online');
     }
     const codeFromUrl = searchParams.get('code') || searchParams.get('c');
     if (codeFromUrl && codeFromUrl.trim()) {
-      if (tabFromUrl === 'live-share' || tabFromUrl === 'online-share' || tabFromUrl === 'live') {
-        setActiveTab('upload');
-        setEntryMode('live');
-      } else {
-        setAccessCodeInput(codeFromUrl.trim());
-        setActiveTab('access');
-      }
+      setAccessCodeInput(codeFromUrl.trim());
+      setActiveTab('access');
     }
   }, [searchParams]);
 
@@ -353,9 +483,61 @@ export default function VaultDashboard({ currentUser }) {
       return;
     }
 
+    // ONLINE SHARING (Live WebRTC P2P Workflow):
+    if (storageMode === 'online' && entryMode === 'file') {
+      setIsStartingLiveShare(true);
+      setUploadError('');
+
+      let durationMinutes = 120;
+      if (expiryOption === '30m') durationMinutes = 30;
+      else if (expiryOption === '1h') durationMinutes = 60;
+      else if (expiryOption === '2h') durationMinutes = 120;
+      else if (expiryOption === '4h') durationMinutes = 240;
+
+      const maxDl = maxDownloads === 'unlimited' ? 'unlimited' : Number(maxDownloads) || 5;
+
+      try {
+        const res = await fetch(apiUrl('/online-share/create'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authService.getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            fileName: selectedFiles[0].name,
+            fileSize: selectedFiles[0].size,
+            mimeType: selectedFiles[0].type || 'application/octet-stream',
+            durationMinutes,
+            maxDownloads: maxDl,
+            deleteAfterDownload: Boolean(deleteAfterDownload),
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Failed to create online sharing session.');
+        }
+
+        initOwnerLiveShare({
+          sessionId: data.sessionId,
+          accessCode: data.accessCode,
+          ownerToken: data.ownerToken,
+          file: selectedFiles[0],
+          fileName: selectedFiles[0].name,
+          fileSize: selectedFiles[0].size,
+          expiresAt: data.expiresAt,
+        });
+      } catch (err) {
+        setUploadError(err.message || 'Could not start online sharing session.');
+      } finally {
+        setIsStartingLiveShare(false);
+      }
+      return;
+    }
+
     // File size validation for cloud uploads
     if (entryMode === 'file' && selectedFiles.some((f) => f.size > 250 * 1024 * 1024)) {
-      setUploadError('One or more files exceed the 250MB cloud upload limit. Switch to Online Sharing for unlimited file size streaming.');
+      setUploadError('One or more files exceed the 250MB cloud upload limit. Select "Online Sharing (Live P2P)" in Storage Policy for unlimited file size streaming.');
       return;
     }
 
@@ -507,9 +689,7 @@ export default function VaultDashboard({ currentUser }) {
 
       // If the code belongs to a Live Online Share session
       if (data.isOnlineLiveShare) {
-        setActiveTab('upload');
-        setEntryMode('live');
-        navigate(`/vault?code=${encodeURIComponent(data.access_code || accessCodeInput.trim())}&tab=live`, { replace: true });
+        navigate(`/online-share?code=${encodeURIComponent(data.access_code || accessCodeInput.trim())}`);
         return;
       }
 
@@ -796,9 +976,7 @@ export default function VaultDashboard({ currentUser }) {
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[#E11D2E] shadow-inner shrink-0">
-                  {entryMode === 'live' ? (
-                    <Radio className="w-5 h-5 text-[#E11D2E] animate-pulse" />
-                  ) : entryMode === 'file' ? (
+                  {entryMode === 'file' ? (
                     <UploadCloud className="w-5 h-5" />
                   ) : (
                     <AlignLeft className="w-5 h-5" />
@@ -807,31 +985,22 @@ export default function VaultDashboard({ currentUser }) {
                 <div>
                   <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                     <span>
-                      {entryMode === 'live'
-                        ? 'Online Sharing (Live P2P)'
-                        : entryMode === 'file'
+                      {entryMode === 'file'
                         ? 'Upload & Encrypt Documents'
                         : 'Send Confidential Secret Note'}
                     </span>
-                    {entryMode === 'live' && (
-                      <span className="text-[10px] font-mono bg-red-950 text-red-400 border border-red-800/60 px-2 py-0.5 rounded-full font-bold">
-                        P2P · No File Limit
-                      </span>
-                    )}
                   </h2>
                   <p className="text-xs text-zinc-400">
-                    {entryMode === 'live'
-                      ? 'Memory-to-memory live WebRTC stream. Zero cloud storage, zero disk writes, disabled when you go offline.'
-                      : entryMode === 'file'
-                      ? 'Package confidential files into an encrypted Backblaze B2 archive.'
+                    {entryMode === 'file'
+                      ? 'Package confidential files into an encrypted Backblaze B2 archive or stream live via Online Sharing.'
                       : 'Write secret text or API tokens and protect with a hashed access key.'}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Sub-Mode Switcher Under Send & Share */}
-            <div className="flex items-center p-1 bg-zinc-950/80 rounded-xl border border-zinc-800 mb-6 max-w-xl">
+            {/* Sub-Mode Switcher Under Send & Share (Only Attach Files & Secret Text) */}
+            <div className="flex items-center p-1 bg-zinc-950/80 rounded-xl border border-zinc-800 mb-6 max-w-sm">
               <button
                 type="button"
                 onClick={() => {
@@ -851,25 +1020,6 @@ export default function VaultDashboard({ currentUser }) {
               <button
                 type="button"
                 onClick={() => {
-                  setEntryMode('live');
-                  setUploadError('');
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  entryMode === 'live'
-                    ? 'bg-zinc-900 text-white border border-red-600/50 shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <Radio className={`w-3.5 h-3.5 ${entryMode === 'live' ? 'text-[#E11D2E] animate-pulse' : 'text-zinc-500'}`} />
-                <span className="truncate">Online Sharing</span>
-                <span className="text-[9px] bg-red-950 text-red-400 border border-red-800/60 px-1.5 py-0.2 rounded font-mono font-bold">
-                  P2P
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
                   setEntryMode('text');
                   setUploadError('');
                 }}
@@ -884,18 +1034,120 @@ export default function VaultDashboard({ currentUser }) {
               </button>
             </div>
 
-            {/* When in live mode, render Live Temporary Online Share directly inside Send & Share */}
-            {entryMode === 'live' ? (
-              <div className="animate-in fade-in duration-150">
-                <OnlineLiveShare
-                  currentUser={currentUser}
-                  initialAccessCode={searchParams.get('code') || ''}
-                  initialFile={liveShareInitialFile}
-                  autoStart={liveShareAutoStart}
-                  initialDuration={expiryOption === '30m' ? 30 : expiryOption === '1h' ? 60 : expiryOption === '4h' ? 240 : 120}
-                  initialMaxDownloads={maxDownloads}
-                  initialDeleteAfterDownload={deleteAfterDownload}
-                />
+            {/* If an Online Live Sharing Session is currently active, render the Live P2P Dashboard */}
+            {activeLiveSession ? (
+              <div className="p-6 rounded-2xl bg-[#0E0E10] border border-[#27272A] space-y-6 animate-in fade-in duration-200">
+                {/* Access Code Box */}
+                <div className="text-center space-y-3 pb-5 border-b border-[#27272A]">
+                  <span className="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center justify-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5 text-[#E11D2E] animate-pulse" />
+                    <span>Live Online Sharing Active · Share Access Code with Recipient</span>
+                  </span>
+
+                  <div className="text-3xl sm:text-4xl font-mono font-black text-white tracking-[0.25em] py-3 px-6 rounded-xl bg-[#18181B] border border-red-900/50 text-[#E11D2E] max-w-sm mx-auto shadow-inner shadow-red-950/40">
+                    {activeLiveSession.accessCode}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(activeLiveSession.accessCode);
+                        setCopiedLiveCode(true);
+                        setTimeout(() => setCopiedLiveCode(false), 2000);
+                      }}
+                      className="px-4 py-2 rounded-lg bg-[#18181B] border border-[#27272A] hover:border-zinc-500 text-xs font-semibold text-white flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      {copiedLiveCode ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedLiveCode ? 'Copied Code!' : 'Copy Code'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const shareUrl = `${window.location.origin}/vault?code=${activeLiveSession.accessCode}`;
+                        navigator.clipboard.writeText(shareUrl);
+                        setCopiedLiveLink(true);
+                        setTimeout(() => setCopiedLiveLink(false), 2000);
+                      }}
+                      className="px-4 py-2 rounded-lg bg-[#18181B] border border-[#27272A] hover:border-zinc-500 text-xs font-semibold text-white flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      {copiedLiveLink ? <Check className="w-3.5 h-3.5 text-green-400" /> : <ExternalLink className="w-3.5 h-3.5" />}
+                      <span>{copiedLiveLink ? 'Copied Link!' : 'Copy Direct Link'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Status and Transfer Info */}
+                <div className="p-4 rounded-xl bg-[#18181B] border border-[#27272A] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-2.5 w-2.5 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                      </span>
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">
+                        Online Sharing State
+                      </span>
+                    </div>
+
+                    <span className="text-[11px] text-zinc-400">
+                      Heartbeat: <span className="text-emerald-400 font-mono">10s Active</span>
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-zinc-300">
+                    <p className="font-semibold text-white truncate">{activeLiveSession.fileName}</p>
+                    <p className="text-zinc-500 mt-0.5">
+                      Size: {formatFileSize(activeLiveSession.fileSize)} · Direct WebRTC memory stream
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] text-xs text-zinc-400 flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-[#E11D2E] shrink-0" />
+                    <span>{liveShareStatusMessage || 'Waiting for recipient to connect with access code...'}</span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  {liveShareProgress && (
+                    <div className="space-y-1.5 pt-2">
+                      <div className="flex items-center justify-between text-xs font-medium">
+                        <span className="text-white">Streaming to recipient</span>
+                        <span className="text-[#E11D2E] font-mono">{liveShareProgress.percent}%</span>
+                      </div>
+
+                      <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-red-600 to-[#E11D2E] transition-all duration-150"
+                          style={{ width: `${liveShareProgress.percent}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono">
+                        <span>{formatFileSize(liveShareProgress.bytesTransferred)} of {formatFileSize(liveShareProgress.totalBytes)}</span>
+                        <span>{liveShareProgress.speedFormatted}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Browser Transparency Warning */}
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Keep this browser tab open.</strong> DocQevrilo never stores your file on disk or cloud servers. The file streams directly from your browser memory. Closing this tab or turning offline will immediately terminate the sharing session.
+                  </span>
+                </div>
+
+                {/* End Sharing Button */}
+                <button
+                  type="button"
+                  onClick={handleEndLiveShare}
+                  className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>End Sharing Session & Disconnect</span>
+                </button>
               </div>
             ) : (
               <>
@@ -1203,7 +1455,14 @@ export default function VaultDashboard({ currentUser }) {
                       storageMode={storageMode}
                       onChange={(mode) => {
                         setStorageMode(mode);
-                        if (mode === 'temporary') {
+                        if (mode === 'online') {
+                          if (!['30m', '1h', '2h', '4h'].includes(expiryOption)) {
+                            setExpiryOption('2h');
+                          }
+                          if (maxDownloads === 'unlimited' || !maxDownloads) {
+                            setMaxDownloads(5);
+                          }
+                        } else if (mode === 'temporary') {
                           setExpiryOption('1h');
                           setMaxDownloads('unlimited');
                           setDeleteAfterDownload(false);
@@ -1213,15 +1472,18 @@ export default function VaultDashboard({ currentUser }) {
                           setDeleteAfterDownload(false);
                         }
                       }}
-                      onSwitchToOnlineShare={() => {
-                        if (selectedFiles.length > 0) {
-                          setLiveShareInitialFile(selectedFiles[0]);
-                        }
-                        setEntryMode('live');
-                      }}
                     />
 
-                    {storageMode === 'long_term' ? (
+                    {storageMode === 'online' ? (
+                      <OnlineSharingSettings
+                        expiry={expiryOption}
+                        setExpiry={setExpiryOption}
+                        maxDownloads={maxDownloads}
+                        setMaxDownloads={setMaxDownloads}
+                        deleteAfterDownload={deleteAfterDownload}
+                        setDeleteAfterDownload={setDeleteAfterDownload}
+                      />
+                    ) : storageMode === 'long_term' ? (
                       <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-amber-900/40 space-y-2">
                         <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800">
                           <span className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -1277,6 +1539,7 @@ export default function VaultDashboard({ currentUser }) {
 
               {/* Cloud Limit Warning when file > 250MB */}
               {entryMode === 'file' &&
+                storageMode !== 'online' &&
                 selectedFiles.some((f) => f.size > 250 * 1024 * 1024) && (
                   <div className="p-3.5 rounded-xl bg-amber-950/50 border border-amber-600/50 text-xs text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-150">
                     <div className="flex items-start gap-2.5">
@@ -1284,19 +1547,16 @@ export default function VaultDashboard({ currentUser }) {
                       <div className="space-y-0.5">
                         <div className="font-bold text-amber-300">File Exceeds 250MB Cloud Storage Limit</div>
                         <p className="text-[11px] text-amber-200/80 leading-relaxed">
-                          Permanent and Temporary B2 cloud storage cap files at 250MB. Switch to Online Sharing for unlimited file size via direct P2P streaming.
+                          Permanent and Temporary B2 cloud storage cap files at 250MB. Select <strong>Online Sharing (Live P2P)</strong> in Storage Policy above for unlimited file size via direct P2P streaming.
                         </p>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        setLiveShareInitialFile(selectedFiles[0]);
-                        setEntryMode('live');
-                      }}
+                      onClick={() => setStorageMode('online')}
                       className="shrink-0 px-3.5 py-1.5 rounded-lg bg-[#E11D2E] hover:bg-[#c91827] text-white text-xs font-bold transition-all cursor-pointer shadow-sm"
                     >
-                      Switch to Online Sharing
+                      Select Online Sharing
                     </button>
                   </div>
                 )}
@@ -1316,10 +1576,12 @@ export default function VaultDashboard({ currentUser }) {
                   currentUser &&
                     ((entryMode === 'file' ? selectedFiles.length === 0 : !textContent.trim()) ||
                       isUploading ||
+                      isStartingLiveShare ||
                       (entryMode === 'file' &&
+                        storageMode !== 'online' &&
                         selectedFiles.some((f) => f.size > 250 * 1024 * 1024)))
                 )}
-                className={`w-full py-3 px-4 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.99] cursor-pointer ${
+                className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.99] cursor-pointer ${
                   !currentUser
                     ? 'bg-gradient-to-r from-[#E11D2E] to-[#8A071A] hover:from-[#FF2E44] hover:to-[#E11D2E] border border-red-500/30'
                     : 'bg-[#E11D2E] hover:bg-[#FF2E44] disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed shadow-red-950/40'
@@ -1330,10 +1592,20 @@ export default function VaultDashboard({ currentUser }) {
                     <Lock className="w-4 h-4 text-white" />
                     <span>Sign In or Create Account to Upload</span>
                   </>
+                ) : isStartingLiveShare ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Starting Live Session...</span>
+                  </>
                 ) : isUploading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
                     <span>Encrypting & Generating Code...</span>
+                  </>
+                ) : storageMode === 'online' && entryMode === 'file' ? (
+                  <>
+                    <Radio className="w-4 h-4 text-white animate-pulse" />
+                    <span>Generate Access Code & Start Online Share</span>
                   </>
                 ) : (
                   <>
