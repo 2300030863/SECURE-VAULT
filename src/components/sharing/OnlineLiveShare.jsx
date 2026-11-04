@@ -21,13 +21,18 @@ import {
 import { getApiBaseUrl } from '../../config/api';
 import { WebRtcShareSession, formatFileSize } from '../../services/webRtcShareService';
 
-export default function OnlineLiveShare({ currentUser = null, initialAccessCode = '' }) {
+export default function OnlineLiveShare({
+  currentUser = null,
+  initialAccessCode = '',
+  initialFile = null,
+  autoStart = false,
+}) {
   const [activeMode, setActiveMode] = useState(initialAccessCode ? 'recipient' : 'owner'); // 'owner' | 'recipient'
 
   // ---------------------------------------------------------------------------
   // Owner State
   // ---------------------------------------------------------------------------
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(initialFile || null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [activeSession, setActiveSession] = useState(null); // { sessionId, accessCode, ownerToken, fileName, fileSize, expiresAt }
   const [ownerShareStatus, setOwnerShareStatus] = useState('idle'); // 'idle' | 'ready' | 'connecting' | 'transferring' | 'complete' | 'error'
@@ -61,6 +66,17 @@ export default function OnlineLiveShare({ currentUser = null, initialAccessCode 
       setActiveMode('recipient');
     }
   }, [initialAccessCode]);
+
+  // Pre-load initial file if passed from main upload tab
+  useEffect(() => {
+    if (initialFile) {
+      setSelectedFile(initialFile);
+      setActiveMode('owner');
+      if (autoStart && currentUser) {
+        handleStartLiveShare(initialFile);
+      }
+    }
+  }, [initialFile, autoStart, currentUser]);
 
   // ---------------------------------------------------------------------------
   // Browser Unload Protection: End session when tab closes
@@ -117,8 +133,9 @@ export default function OnlineLiveShare({ currentUser = null, initialAccessCode 
    * 2. Starts the 10-second presence heartbeat.
    * 3. Initializes the WebRTC P2P listener ready to stream directly from browser memory.
    */
-  const handleStartLiveShare = async () => {
-    if (!selectedFile) {
+  const handleStartLiveShare = async (fileOverride = null) => {
+    const fileToUse = fileOverride || selectedFile;
+    if (!fileToUse) {
       setOwnerError('Please select a file to share.');
       return;
     }
@@ -141,9 +158,9 @@ export default function OnlineLiveShare({ currentUser = null, initialAccessCode 
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          fileName: selectedFile.name,
-          fileSize: selectedFile.size,
-          mimeType: selectedFile.type || 'application/octet-stream',
+          fileName: fileToUse.name,
+          fileSize: fileToUse.size,
+          mimeType: fileToUse.type || 'application/octet-stream',
           durationMinutes: 120, // 2 hours live window
         }),
       });
@@ -161,7 +178,7 @@ export default function OnlineLiveShare({ currentUser = null, initialAccessCode 
       startOwnerHeartbeat(data.sessionId, data.ownerToken);
 
       // 2. Initialize WebRTC Session as Owner (Sender)
-      initOwnerWebRtc(data.sessionId, data.ownerToken, selectedFile);
+      initOwnerWebRtc(data.sessionId, data.ownerToken, fileToUse);
     } catch (err) {
       console.error('[Start Live Share Error]', err);
       setOwnerError(err.message || 'Could not start live sharing session.');

@@ -91,6 +91,8 @@ export default function VaultDashboard({ currentUser }) {
   const [maxDownloads, setMaxDownloads] = useState(5); // 1 | 5 | 10 | 'unlimited'
   const [deleteAfterDownload, setDeleteAfterDownload] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [liveShareInitialFile, setLiveShareInitialFile] = useState(null);
+  const [liveShareAutoStart, setLiveShareAutoStart] = useState(false);
   const [documentName, setDocumentName] = useState('');
   const [textContent, setTextContent] = useState('');
   const [textTitle, setTextTitle] = useState('');
@@ -347,6 +349,15 @@ export default function VaultDashboard({ currentUser }) {
     }
     if (entryMode === 'text' && !textContent.trim()) {
       setUploadError('Please enter text content to secure.');
+      return;
+    }
+
+    // When Online Sharing is selected for files, seamlessly launch Live Online Share (WebRTC P2P)!
+    // ZERO cloud storage. ZERO disk writes. NO 250MB file size limit!
+    if (storageMode === 'online' && entryMode === 'file' && selectedFiles.length > 0) {
+      setLiveShareInitialFile(selectedFiles[0]);
+      setLiveShareAutoStart(true);
+      setActiveTab('live-share');
       return;
     }
 
@@ -1232,6 +1243,50 @@ export default function VaultDashboard({ currentUser }) {
                 </div>
               )}
 
+              {/* Live Online Sharing Info Callout (Zero Server Storage · No Size Limit) */}
+              {storageMode === 'online' && entryMode === 'file' && (
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-red-950/40 via-zinc-950 to-zinc-900 border border-red-500/40 text-xs text-zinc-300 flex items-start gap-3 shadow-md shadow-red-950/20 animate-in fade-in duration-150">
+                  <div className="w-8 h-8 rounded-lg bg-red-950/80 border border-red-600/40 flex items-center justify-center shrink-0 text-[#E11D2E]">
+                    <Radio className="w-4 h-4 animate-pulse" />
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-white font-bold tracking-tight">Live P2P Online Sharing</span>
+                      <span className="text-[10px] bg-red-900/60 text-red-300 border border-red-700/60 px-2 py-0.5 rounded-full font-mono font-medium">
+                        No 250MB Limit · Unlimited File Size
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      Files of any size (e.g. 3.8 GB, 10 GB+) stream directly from your browser memory to the recipient over encrypted WebRTC DataChannel. Zero cloud storage, zero disk writes, completely private.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Cloud Limit Warning for Non-Online Modes */}
+              {entryMode === 'file' &&
+                storageMode !== 'online' &&
+                selectedFiles.some((f) => f.size > 250 * 1024 * 1024) && (
+                  <div className="p-3.5 rounded-xl bg-amber-950/50 border border-amber-600/50 text-xs text-amber-200 flex items-start justify-between gap-3 animate-in fade-in duration-150">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <div className="font-bold text-amber-300">File Exceeds 250MB Cloud Storage Limit</div>
+                        <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                          Permanent and Temporary B2 cloud storage cap files at 250MB. Switch to Live Online Sharing for unlimited file size via direct P2P streaming.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setStorageMode('online')}
+                      className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-bold transition-all cursor-pointer shadow-sm"
+                    >
+                      Switch to Online Share
+                    </button>
+                  </div>
+                )}
+
               {/* Error Banner */}
               {uploadError && (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-300">
@@ -1245,7 +1300,11 @@ export default function VaultDashboard({ currentUser }) {
                 type="submit"
                 disabled={Boolean(
                   currentUser &&
-                    ((entryMode === 'file' ? selectedFiles.length === 0 : !textContent.trim()) || isUploading)
+                    ((entryMode === 'file' ? selectedFiles.length === 0 : !textContent.trim()) ||
+                      isUploading ||
+                      (entryMode === 'file' &&
+                        storageMode !== 'online' &&
+                        selectedFiles.some((f) => f.size > 250 * 1024 * 1024)))
                 )}
                 className={`w-full py-3 px-4 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.99] cursor-pointer ${
                   !currentUser
@@ -1262,6 +1321,11 @@ export default function VaultDashboard({ currentUser }) {
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
                     <span>Encrypting & Generating Code...</span>
+                  </>
+                ) : storageMode === 'online' && entryMode === 'file' ? (
+                  <>
+                    <Radio className="w-4 h-4 text-white animate-pulse" />
+                    <span>Generate Access Code & Start Live Share (No Limit)</span>
                   </>
                 ) : (
                   <>
@@ -1567,6 +1631,8 @@ export default function VaultDashboard({ currentUser }) {
             <OnlineLiveShare
               currentUser={currentUser}
               initialAccessCode={searchParams.get('code') || ''}
+              initialFile={liveShareInitialFile}
+              autoStart={liveShareAutoStart}
             />
           </div>
         )}
