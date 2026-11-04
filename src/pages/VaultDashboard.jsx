@@ -96,7 +96,7 @@ export default function VaultDashboard({ currentUser }) {
   const [documentName, setDocumentName] = useState('');
   const [textContent, setTextContent] = useState('');
   const [textTitle, setTextTitle] = useState('');
-  const [expiryOption, setExpiryOption] = useState('24h');
+  const [expiryOption, setExpiryOption] = useState('2h');
   const [customMode, setCustomMode] = useState('duration'); // 'duration' | 'date'
   const [customDurationValue, setCustomDurationValue] = useState(3);
   const [customDurationUnit, setCustomDurationUnit] = useState('d'); // 'm' | 'h' | 'd' | 'w' | 'mo'
@@ -1135,7 +1135,7 @@ export default function VaultDashboard({ currentUser }) {
                       </span>
                       <span className="text-[11px] text-zinc-400 block truncate">
                         {storageMode === 'online'
-                          ? `Online Sharing · ${expiryOption} expiry · ${maxDownloads === 'unlimited' ? '∞' : maxDownloads} downloads${deleteAfterDownload ? ' · Burn on read' : ''}`
+                          ? `Live Online P2P · ${expiryOption} window · ${maxDownloads === 'unlimited' ? '∞' : maxDownloads} recipients${deleteAfterDownload ? ' · Burn on finish' : ''} · Zero Cloud`
                           : storageMode === 'temporary'
                           ? `Temporary Auto-Purge (${expiryOption})`
                           : 'Long-Term Storage · Permanent retention'}
@@ -1145,7 +1145,7 @@ export default function VaultDashboard({ currentUser }) {
 
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300">
-                      {storageMode === 'online' ? 'Online' : storageMode === 'temporary' ? 'Temp' : 'Long-Term'}
+                      {storageMode === 'online' ? 'Live P2P' : storageMode === 'temporary' ? 'Temp' : 'Long-Term'}
                     </span>
                     {showSettingsAccordion ? (
                       <ChevronUp className="w-4 h-4 text-zinc-400" />
@@ -1162,8 +1162,8 @@ export default function VaultDashboard({ currentUser }) {
                       onChange={(mode) => {
                         setStorageMode(mode);
                         if (mode === 'online') {
-                          if (!['30m', '1h', '24h', '7d'].includes(expiryOption)) {
-                            setExpiryOption('24h');
+                          if (!['30m', '1h', '2h', '4h'].includes(expiryOption)) {
+                            setExpiryOption('2h');
                           }
                           if (maxDownloads === 'unlimited' || !maxDownloads) {
                             setMaxDownloads(5);
@@ -1633,6 +1633,9 @@ export default function VaultDashboard({ currentUser }) {
               initialAccessCode={searchParams.get('code') || ''}
               initialFile={liveShareInitialFile}
               autoStart={liveShareAutoStart}
+              initialDuration={expiryOption === '30m' ? 30 : expiryOption === '1h' ? 60 : expiryOption === '4h' ? 240 : 120}
+              initialMaxDownloads={maxDownloads}
+              initialDeleteAfterDownload={deleteAfterDownload}
             />
           </div>
         )}

@@ -27,6 +27,9 @@ export default function OnlineLiveShare({
   initialAccessCode = '',
   initialFile = null,
   autoStart = false,
+  initialDuration = 120,
+  initialMaxDownloads = 5,
+  initialDeleteAfterDownload = false,
 }) {
   const [activeMode, setActiveMode] = useState(initialAccessCode ? 'recipient' : 'owner'); // 'owner' | 'recipient'
 
@@ -35,6 +38,10 @@ export default function OnlineLiveShare({
   // ---------------------------------------------------------------------------
   const [selectedFile, setSelectedFile] = useState(initialFile || null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [liveDurationMinutes, setLiveDurationMinutes] = useState(initialDuration || 120);
+  const [maxDownloadsLimit, setMaxDownloadsLimit] = useState(initialMaxDownloads || 5);
+  const [burnOnFinish, setBurnOnFinish] = useState(Boolean(initialDeleteAfterDownload));
+  const [showLiveSettings, setShowLiveSettings] = useState(false);
   const [activeSession, setActiveSession] = useState(null); // { sessionId, accessCode, ownerToken, fileName, fileSize, expiresAt }
   const [ownerShareStatus, setOwnerShareStatus] = useState('idle'); // 'idle' | 'ready' | 'connecting' | 'transferring' | 'complete' | 'error'
   const [ownerStatusMessage, setOwnerStatusMessage] = useState('');
@@ -157,7 +164,9 @@ export default function OnlineLiveShare({
           fileName: fileToUse.name,
           fileSize: fileToUse.size,
           mimeType: fileToUse.type || 'application/octet-stream',
-          durationMinutes: 120, // 2 hours live window
+          durationMinutes: liveDurationMinutes,
+          maxDownloads: maxDownloadsLimit,
+          deleteAfterDownload: burnOnFinish,
         }),
       });
 
@@ -233,7 +242,16 @@ export default function OnlineLiveShare({
       },
       onComplete: () => {
         setOwnerShareStatus('complete');
-        setOwnerStatusMessage('File transfer completed successfully!');
+        setOwnerStatusMessage(
+          burnOnFinish
+            ? 'Transfer complete! Auto-ending session in 4 seconds (Burn on Finish)...'
+            : 'File transfer completed successfully!'
+        );
+        if (burnOnFinish) {
+          setTimeout(() => {
+            handleEndSession();
+          }, 4000);
+        }
       },
       onError: (errMessage) => {
         setOwnerError(errMessage);
