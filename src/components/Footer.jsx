@@ -256,7 +256,15 @@ export default function Footer({ currentUser }) {
           <div className="sv-footer-built-signature">
             <span>Built with</span>
             <Heart size={14} className="sv-footer-heart" />
-            <span className="sv-footer-built-author">by Kommalapati Sivesh</span>
+            <a
+              href="https://kommalapatisivesh.me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sv-footer-built-author hover:text-white transition-colors"
+              title="Visit Kommalapati Sivesh's portfolio"
+            >
+              by Kommalapati Sivesh
+            </a>
           </div>
 
           <div className="sv-footer-legal">
