@@ -87,22 +87,39 @@ export default function OnlineLiveShare({
   }, [initialFile, autoStart]);
 
   // ---------------------------------------------------------------------------
-  // Browser Unload Protection: End session when tab closes
+  // Browser Unload Protection: Instantly end session when tab closes or owner goes offline
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleUnloadOrHide = () => {
       if (activeSession?.sessionId && activeSession?.ownerToken) {
         const payload = JSON.stringify({
           sessionId: activeSession.sessionId,
           ownerToken: activeSession.ownerToken,
         });
-        navigator.sendBeacon(`${getApiBaseUrl()}/online-share/end`, payload);
+
+        // 1. Send via Beacon with application/json
+        try {
+          const blob = new Blob([payload], { type: 'application/json' });
+          navigator.sendBeacon(`${getApiBaseUrl()}/online-share/end`, blob);
+        } catch (_) {}
+
+        // 2. Fallback keepalive fetch
+        try {
+          fetch(`${getApiBaseUrl()}/online-share/end`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true,
+          }).catch(() => {});
+        } catch (_) {}
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('beforeunload', handleUnloadOrHide);
+    window.addEventListener('pagehide', handleUnloadOrHide);
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('beforeunload', handleUnloadOrHide);
+      window.removeEventListener('pagehide', handleUnloadOrHide);
     };
   }, [activeSession]);
 
@@ -111,8 +128,21 @@ export default function OnlineLiveShare({
     return () => {
       if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
       if (webRtcSessionRef.current) webRtcSessionRef.current.close();
+      if (activeSession?.sessionId && activeSession?.ownerToken) {
+        try {
+          fetch(`${getApiBaseUrl()}/online-share/end`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: activeSession.sessionId,
+              ownerToken: activeSession.ownerToken,
+            }),
+            keepalive: true,
+          }).catch(() => {});
+        } catch (_) {}
+      }
     };
-  }, []);
+  }, [activeSession]);
 
   // ---------------------------------------------------------------------------
   // OWNER ACTIONS
@@ -194,7 +224,8 @@ export default function OnlineLiveShare({
   };
 
   /**
-   * 10-second presence heartbeat timer
+   * High-frequency 4-second presence heartbeat timer
+   * Server terminates session if heartbeats stop for > 15s.
    */
   const startOwnerHeartbeat = (sessionId, ownerToken) => {
     if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
@@ -212,7 +243,7 @@ export default function OnlineLiveShare({
       } catch (err) {
         console.warn('[Heartbeat Network Error]', err.message);
       }
-    }, 10000);
+    }, 4000); // 4-second heartbeat
   };
 
   /**
@@ -755,12 +786,25 @@ export default function OnlineLiveShare({
                 </p>
               </div>
 
-              {recipientError && (
+              {recipientStatus === 'offline' ? (
+                <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-xs space-y-2 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 font-bold text-red-300">
+                    <AlertCircle className="w-4 h-4 text-[#E11D2E] shrink-0" />
+                    <span>Session Unavailable (Owner Offline)</span>
+                  </div>
+                  <p className="text-red-200/90 leading-relaxed">
+                    This shared file is no longer available. The owner has ended the sharing session or turned offline.
+                  </p>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed border-t border-red-900/40 pt-2">
+                    Because DocQevrilo never stores files in cloud buckets or server disks, the file existed only in the owner's active browser memory and cannot be recovered or accessed in the future.
+                  </p>
+                </div>
+              ) : recipientError ? (
                 <div className="p-3.5 rounded-xl bg-red-950/30 border border-red-800/40 text-red-300 text-xs flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{recipientError}</span>
                 </div>
-              )}
+              ) : null}
 
               <button
                 type="submit"
@@ -851,12 +895,25 @@ export default function OnlineLiveShare({
                 </div>
               )}
 
-              {recipientError && (
+              {recipientStatus === 'offline' ? (
+                <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-xs space-y-2 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 font-bold text-red-300">
+                    <AlertCircle className="w-4 h-4 text-[#E11D2E] shrink-0" />
+                    <span>Session Unavailable (Owner Offline)</span>
+                  </div>
+                  <p className="text-red-200/90 leading-relaxed">
+                    This shared file is no longer available. The owner has ended the sharing session or turned offline.
+                  </p>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed border-t border-red-900/40 pt-2">
+                    Because DocQevrilo never stores files in cloud buckets or server disks, the file existed only in the owner's active browser memory and cannot be recovered or accessed in the future.
+                  </p>
+                </div>
+              ) : recipientError ? (
                 <div className="p-3.5 rounded-xl bg-red-950/30 border border-red-800/40 text-red-300 text-xs flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{recipientError}</span>
                 </div>
-              )}
+              ) : null}
 
               <button
                 type="button"

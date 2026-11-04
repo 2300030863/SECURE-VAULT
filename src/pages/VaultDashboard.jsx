@@ -507,6 +507,13 @@ export default function VaultDashboard({ currentUser }) {
         throw new Error(data.error || 'Invalid access code or access expired.');
       }
 
+      // If the code belongs to a Live Online Share session
+      if (data.isOnlineLiveShare) {
+        setActiveTab('live-share');
+        navigate(`/vault?code=${encodeURIComponent(data.access_code || accessCodeInput.trim())}&tab=live-share`, { replace: true });
+        return;
+      }
+
       setUnlockedDoc({
         ...data.document,
         enteredCode: accessCodeInput.trim(),
