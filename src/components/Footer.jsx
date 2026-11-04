@@ -214,7 +214,7 @@ export default function Footer({ currentUser }) {
               <div className="sv-dev-card-bottom">
                 <span className="sv-dev-connect-kicker">LET'S CONNECT</span>
                 <a
-                  href="https://kommalaptisivesh.me"
+                  href="https://kommalapatisivesh.me"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="sv-dev-portfolio-link"
@@ -222,7 +222,7 @@ export default function Footer({ currentUser }) {
                 >
                   <span className="sv-dev-link-lead">Let's Connect</span>
                   <span className="sv-dev-link-arrow">&rarr;</span>
-                  <span className="sv-dev-link-url">kommalaptisivesh.me</span>
+                  <span className="sv-dev-link-url">kommalapatisivesh.me</span>
                   <ExternalLink size={12} className="sv-dev-link-ext" />
                 </a>
               </div>
