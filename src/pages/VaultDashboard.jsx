@@ -86,8 +86,8 @@ export default function VaultDashboard({ currentUser }) {
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
 
   // Upload & Storage Mode State
-  const [entryMode, setEntryMode] = useState('file'); // 'file' | 'text'
-  const [storageMode, setStorageMode] = useState('online'); // 'online' | 'temporary' | 'long_term'
+  const [entryMode, setEntryMode] = useState('file'); // 'file' | 'live' | 'text'
+  const [storageMode, setStorageMode] = useState('temporary'); // 'temporary' | 'long_term'
   const [maxDownloads, setMaxDownloads] = useState(5); // 1 | 5 | 10 | 'unlimited'
   const [deleteAfterDownload, setDeleteAfterDownload] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -96,7 +96,7 @@ export default function VaultDashboard({ currentUser }) {
   const [documentName, setDocumentName] = useState('');
   const [textContent, setTextContent] = useState('');
   const [textTitle, setTextTitle] = useState('');
-  const [expiryOption, setExpiryOption] = useState('2h');
+  const [expiryOption, setExpiryOption] = useState('24h');
   const [customMode, setCustomMode] = useState('duration'); // 'duration' | 'date'
   const [customDurationValue, setCustomDurationValue] = useState(3);
   const [customDurationUnit, setCustomDurationUnit] = useState('d'); // 'm' | 'h' | 'd' | 'w' | 'mo'
@@ -1182,18 +1182,16 @@ export default function VaultDashboard({ currentUser }) {
                         Storage Policy & Access Rules
                       </span>
                       <span className="text-[11px] text-zinc-400 block truncate">
-                        {storageMode === 'online'
-                          ? `Live Online P2P · ${expiryOption} window · ${maxDownloads === 'unlimited' ? '∞' : maxDownloads} recipients${deleteAfterDownload ? ' · Burn on finish' : ''} · Zero Cloud`
-                          : storageMode === 'temporary'
-                          ? `Temporary Auto-Purge (${expiryOption})`
-                          : 'Long-Term Storage · Permanent retention'}
+                        {storageMode === 'temporary'
+                          ? `Temporary Auto-Purge (${expiryOption}) · Backblaze B2`
+                          : 'Long-Term Storage · Permanent retention · Backblaze B2'}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300">
-                      {storageMode === 'online' ? 'Live P2P' : storageMode === 'temporary' ? 'Temp' : 'Long-Term'}
+                      {storageMode === 'temporary' ? 'Temp Auto-Purge' : 'Long-Term Vault'}
                     </span>
                     {showSettingsAccordion ? (
                       <ChevronUp className="w-4 h-4 text-zinc-400" />
@@ -1209,14 +1207,7 @@ export default function VaultDashboard({ currentUser }) {
                       storageMode={storageMode}
                       onChange={(mode) => {
                         setStorageMode(mode);
-                        if (mode === 'online') {
-                          if (!['30m', '1h', '2h', '4h'].includes(expiryOption)) {
-                            setExpiryOption('2h');
-                          }
-                          if (maxDownloads === 'unlimited' || !maxDownloads) {
-                            setMaxDownloads(5);
-                          }
-                        } else if (mode === 'temporary') {
+                        if (mode === 'temporary') {
                           setExpiryOption('1h');
                           setMaxDownloads('unlimited');
                           setDeleteAfterDownload(false);
@@ -1226,18 +1217,10 @@ export default function VaultDashboard({ currentUser }) {
                           setDeleteAfterDownload(false);
                         }
                       }}
+                      onSwitchToLive={() => setEntryMode('live')}
                     />
 
-                    {storageMode === 'online' ? (
-                      <OnlineSharingSettings
-                        expiry={expiryOption}
-                        setExpiry={setExpiryOption}
-                        maxDownloads={maxDownloads}
-                        setMaxDownloads={setMaxDownloads}
-                        deleteAfterDownload={deleteAfterDownload}
-                        setDeleteAfterDownload={setDeleteAfterDownload}
-                      />
-                    ) : storageMode === 'long_term' ? (
+                    {storageMode === 'long_term' ? (
                       <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-amber-900/40 space-y-2">
                         <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800">
                           <span className="text-xs font-bold text-white flex items-center gap-1.5">

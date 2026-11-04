@@ -1,36 +1,25 @@
 import React from 'react';
-import { Clock, Globe, HardDrive, Check, Sparkles } from 'lucide-react';
+import { Clock, HardDrive, Check, Sparkles, Radio } from 'lucide-react';
 
-export default function StorageModeSelector({ storageMode, onChange }) {
+export default function StorageModeSelector({ storageMode, onChange, onSwitchToLive }) {
   const modes = [
     {
       id: 'temporary',
       name: 'Temporary Storage',
       tagline: 'Quick Auto-Expiring',
-      description: 'Files automatically purge after a short selected expiration period.',
+      description: 'Files are encrypted and stored in Backblaze B2, automatically purging after your selected expiration period.',
       icon: Clock,
-      badge: 'Auto-Purge',
-      badgeColor: 'text-zinc-400 bg-zinc-800 border-zinc-700',
+      badge: 'B2 Auto-Purge',
+      badgeColor: 'text-zinc-300 bg-zinc-800 border-zinc-700',
       activeRing: 'border-zinc-500 bg-zinc-900/60',
-    },
-    {
-      id: 'online',
-      name: 'Online Sharing (Live P2P)',
-      tagline: 'Live Memory Stream · No Limit',
-      description: 'Zero cloud storage. Files stream live directly to the recipient over WebRTC with no file size limits.',
-      icon: Globe,
-      badge: 'Live P2P · Unlimited Size',
-      badgeColor: 'text-red-400 bg-red-950/70 border-[#E11D2E]/40',
-      activeRing: 'border-[#E11D2E] bg-red-950/20 shadow-lg shadow-red-950/30',
-      isDefault: true,
     },
     {
       id: 'long_term',
       name: 'Long-Term Storage',
       tagline: 'Extended Vault Retention',
-      description: 'Files remain securely archived until the owner explicitly deletes them.',
+      description: 'Files remain securely archived in Backblaze B2 until explicitly deleted by you.',
       icon: HardDrive,
-      badge: 'Protected Retention',
+      badge: 'Permanent Retention',
       badgeColor: 'text-amber-400 bg-amber-950/70 border-amber-800/40',
       activeRing: 'border-amber-500/70 bg-amber-950/20',
     },
@@ -41,12 +30,12 @@ export default function StorageModeSelector({ storageMode, onChange }) {
       <div className="flex items-center justify-between">
         <label className="text-xs font-semibold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-[#E11D2E]" />
-          <span>Select Storage Architecture</span>
+          <span>Cloud Storage Policy</span>
         </label>
-        <span className="text-[11px] text-zinc-500 font-mono">B2 + TiDB Managed</span>
+        <span className="text-[11px] text-zinc-500 font-mono">Backblaze B2 + TiDB</span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {modes.map((mode) => {
           const Icon = mode.icon;
           const isSelected = storageMode === mode.id;
@@ -97,6 +86,25 @@ export default function StorageModeSelector({ storageMode, onChange }) {
           );
         })}
       </div>
+
+      {/* Switch to Live Sharing P2P Callout */}
+      {onSwitchToLive && (
+        <div className="p-3 rounded-xl bg-gradient-to-r from-red-950/30 to-zinc-900 border border-red-900/40 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 text-zinc-300">
+            <Radio className="w-4 h-4 text-[#E11D2E] shrink-0 animate-pulse" />
+            <span>
+              Looking for direct P2P transfer with <strong className="text-white">zero cloud storage</strong> and <strong className="text-white">no 250MB limit</strong>?
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onSwitchToLive}
+            className="shrink-0 px-2.5 py-1 rounded-lg bg-[#E11D2E] hover:bg-[#FF2E44] text-white font-semibold text-[11px] transition-all cursor-pointer shadow-sm"
+          >
+            Switch to Live Sharing (P2P)
+          </button>
+        </div>
+      )}
     </div>
   );
 }
