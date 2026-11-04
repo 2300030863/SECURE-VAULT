@@ -122,13 +122,15 @@ export default function VaultDashboard({ currentUser }) {
   // Auto-fill code from URL query param if present (?code=ABC or ?c=ABC or ?tab=live-share)
   useEffect(() => {
     const tabFromUrl = searchParams.get('tab');
-    if (tabFromUrl === 'live-share' || tabFromUrl === 'online-share') {
-      setActiveTab('live-share');
+    if (tabFromUrl === 'live-share' || tabFromUrl === 'online-share' || tabFromUrl === 'live') {
+      setActiveTab('upload');
+      setEntryMode('live');
     }
     const codeFromUrl = searchParams.get('code') || searchParams.get('c');
     if (codeFromUrl && codeFromUrl.trim()) {
-      if (tabFromUrl === 'live-share' || tabFromUrl === 'online-share') {
-        setActiveTab('live-share');
+      if (tabFromUrl === 'live-share' || tabFromUrl === 'online-share' || tabFromUrl === 'live') {
+        setActiveTab('upload');
+        setEntryMode('live');
       } else {
         setAccessCodeInput(codeFromUrl.trim());
         setActiveTab('access');
@@ -357,7 +359,7 @@ export default function VaultDashboard({ currentUser }) {
     if (storageMode === 'online' && entryMode === 'file' && selectedFiles.length > 0) {
       setLiveShareInitialFile(selectedFiles[0]);
       setLiveShareAutoStart(true);
-      setActiveTab('live-share');
+      setEntryMode('live');
       return;
     }
 
@@ -509,8 +511,9 @@ export default function VaultDashboard({ currentUser }) {
 
       // If the code belongs to a Live Online Share session
       if (data.isOnlineLiveShare) {
-        setActiveTab('live-share');
-        navigate(`/vault?code=${encodeURIComponent(data.access_code || accessCodeInput.trim())}&tab=live-share`, { replace: true });
+        setActiveTab('upload');
+        setEntryMode('live');
+        navigate(`/vault?code=${encodeURIComponent(data.access_code || accessCodeInput.trim())}&tab=live`, { replace: true });
         return;
       }
 
@@ -773,22 +776,6 @@ export default function VaultDashboard({ currentUser }) {
             <span className="tab-label-short">Unlock</span>
           </button>
 
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'live-share'}
-            onClick={() => setActiveTab('live-share')}
-            className={`vault-tab-btn ${activeTab === 'live-share' ? 'active' : ''}`}
-            title="Live Online P2P Share"
-          >
-            <Radio className="w-3.5 h-3.5 shrink-0 text-[#E11D2E]" />
-            <span className="tab-label-full">Live Share</span>
-            <span className="tab-label-short">Live</span>
-            <span className="vault-tab-badge" style={{ background: '#b91c1c', color: '#fff', fontSize: '9px', padding: '1px 5px' }}>
-              P2P
-            </span>
-          </button>
-
           {currentUser && (
             <button
               type="button"
@@ -813,14 +800,33 @@ export default function VaultDashboard({ currentUser }) {
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[#E11D2E] shadow-inner shrink-0">
-                  {entryMode === 'file' ? <UploadCloud className="w-5 h-5" /> : <AlignLeft className="w-5 h-5" />}
+                  {entryMode === 'live' ? (
+                    <Radio className="w-5 h-5 text-[#E11D2E] animate-pulse" />
+                  ) : entryMode === 'file' ? (
+                    <UploadCloud className="w-5 h-5" />
+                  ) : (
+                    <AlignLeft className="w-5 h-5" />
+                  )}
                 </div>
                 <div>
-                  <h2 className="text-base sm:text-lg font-bold text-white">
-                    {entryMode === 'file' ? 'Upload & Encrypt Documents' : 'Send Confidential Secret Note'}
+                  <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                    <span>
+                      {entryMode === 'live'
+                        ? 'Live Temporary Online Sharing'
+                        : entryMode === 'file'
+                        ? 'Upload & Encrypt Documents'
+                        : 'Send Confidential Secret Note'}
+                    </span>
+                    {entryMode === 'live' && (
+                      <span className="text-[10px] font-mono bg-red-950 text-red-400 border border-red-800/60 px-2 py-0.5 rounded-full font-bold">
+                        P2P · No 250MB Limit
+                      </span>
+                    )}
                   </h2>
                   <p className="text-xs text-zinc-400">
-                    {entryMode === 'file'
+                    {entryMode === 'live'
+                      ? 'Memory-to-memory live WebRTC stream. Zero cloud storage, zero disk writes, disabled when you go offline.'
+                      : entryMode === 'file'
                       ? 'Package confidential files into an encrypted Backblaze B2 archive.'
                       : 'Write secret text or API tokens and protect with a hashed access key.'}
                   </p>
@@ -828,36 +834,8 @@ export default function VaultDashboard({ currentUser }) {
               </div>
             </div>
 
-            {/* Sign In Required Notice for Unauthenticated Users */}
-            {!currentUser && (
-              <div className="mb-5 p-4 rounded-xl bg-red-950/30 border border-red-800/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2.5 text-zinc-300">
-                  <Lock className="w-4 h-4 text-[#E11D2E] shrink-0" />
-                  <span>
-                    <strong className="text-white">Account Authentication Required:</strong> You must create an account or sign in to upload documents to the vault.
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => navigate('/register')}
-                    className="px-3 py-1.5 rounded-lg bg-[#E11D2E] hover:bg-[#FF2E44] text-white font-semibold transition-all cursor-pointer shadow-sm text-xs"
-                  >
-                    Create Account
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/login')}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-all cursor-pointer text-xs"
-                  >
-                    Sign In
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Mode Switcher: Attach File vs Send Text */}
-            <div className="flex items-center p-1 bg-zinc-950/80 rounded-xl border border-zinc-800 mb-5 max-w-md">
+            {/* Sub-Mode Switcher Under Send & Share */}
+            <div className="flex items-center p-1 bg-zinc-950/80 rounded-xl border border-zinc-800 mb-6 max-w-xl">
               <button
                 type="button"
                 onClick={() => {
@@ -871,8 +849,28 @@ export default function VaultDashboard({ currentUser }) {
                 }`}
               >
                 <Paperclip className={`w-3.5 h-3.5 ${entryMode === 'file' ? 'text-[#E11D2E]' : 'text-zinc-500'}`} />
-                <span>Attach Files</span>
+                <span className="truncate">Attach Files</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEntryMode('live');
+                  setUploadError('');
+                }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  entryMode === 'live'
+                    ? 'bg-zinc-900 text-white border border-red-600/50 shadow-xs'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Radio className={`w-3.5 h-3.5 ${entryMode === 'live' ? 'text-[#E11D2E] animate-pulse' : 'text-zinc-500'}`} />
+                <span className="truncate">Live Sharing</span>
+                <span className="text-[9px] bg-red-950 text-red-400 border border-red-800/60 px-1.5 py-0.2 rounded font-mono font-bold">
+                  P2P
+                </span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -886,9 +884,52 @@ export default function VaultDashboard({ currentUser }) {
                 }`}
               >
                 <AlignLeft className={`w-3.5 h-3.5 ${entryMode === 'text' ? 'text-[#E11D2E]' : 'text-zinc-500'}`} />
-                <span>Secret Text</span>
+                <span className="truncate">Secret Text</span>
               </button>
             </div>
+
+            {/* When in live mode, render Live Temporary Online Share directly inside Send & Share */}
+            {entryMode === 'live' ? (
+              <div className="animate-in fade-in duration-150">
+                <OnlineLiveShare
+                  currentUser={currentUser}
+                  initialAccessCode={searchParams.get('code') || ''}
+                  initialFile={liveShareInitialFile}
+                  autoStart={liveShareAutoStart}
+                  initialDuration={expiryOption === '30m' ? 30 : expiryOption === '1h' ? 60 : expiryOption === '4h' ? 240 : 120}
+                  initialMaxDownloads={maxDownloads}
+                  initialDeleteAfterDownload={deleteAfterDownload}
+                />
+              </div>
+            ) : (
+              <>
+                {/* Sign In Required Notice for Unauthenticated Users */}
+                {!currentUser && (
+                  <div className="mb-5 p-4 rounded-xl bg-red-950/30 border border-red-800/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5 text-zinc-300">
+                      <Lock className="w-4 h-4 text-[#E11D2E] shrink-0" />
+                      <span>
+                        <strong className="text-white">Account Authentication Required:</strong> You must create an account or sign in to upload documents to the vault.
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => navigate('/register')}
+                        className="px-3 py-1.5 rounded-lg bg-[#E11D2E] hover:bg-[#FF2E44] text-white font-semibold transition-all cursor-pointer shadow-sm text-xs"
+                      >
+                        Create Account
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/login')}
+                        className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-all cursor-pointer text-xs"
+                      >
+                        Sign In
+                      </button>
+                    </div>
+                  </div>
+                )}
 
             {/* Upload Form */}
             <form onSubmit={handleUpload} className="space-y-4">
@@ -1407,6 +1448,8 @@ export default function VaultDashboard({ currentUser }) {
                 </div>
               </div>
             )}
+              </>
+            )}
           </div>
         )}
 
@@ -1629,21 +1672,6 @@ export default function VaultDashboard({ currentUser }) {
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Tab: Live Temporary Online Sharing (Memory-to-Memory WebRTC Stream) */}
-        {activeTab === 'live-share' && (
-          <div className="animate-in fade-in duration-150 w-full">
-            <OnlineLiveShare
-              currentUser={currentUser}
-              initialAccessCode={searchParams.get('code') || ''}
-              initialFile={liveShareInitialFile}
-              autoStart={liveShareAutoStart}
-              initialDuration={expiryOption === '30m' ? 30 : expiryOption === '1h' ? 60 : expiryOption === '4h' ? 240 : 120}
-              initialMaxDownloads={maxDownloads}
-              initialDeleteAfterDownload={deleteAfterDownload}
-            />
           </div>
         )}
 
