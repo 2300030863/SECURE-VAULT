@@ -243,7 +243,7 @@ export default function OnlineLiveShare({
       } catch (err) {
         console.warn('[Heartbeat Network Error]', err.message);
       }
-    }, 4000); // 4-second heartbeat
+    }, 8000); // 8-10 second heartbeat
   };
 
   /**
@@ -338,7 +338,7 @@ export default function OnlineLiveShare({
 
   const copyShareLink = () => {
     if (activeSession?.accessCode) {
-      const shareUrl = `${window.location.origin}/vault?tab=live-share&code=${activeSession.accessCode}`;
+      const shareUrl = `${window.location.origin}/vault?tab=online-share&code=${activeSession.accessCode}`;
       navigator.clipboard.writeText(shareUrl);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
@@ -482,7 +482,7 @@ export default function OnlineLiveShare({
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-[#E11D2E]"></span>
               </span>
               <span className="text-xs font-bold uppercase tracking-widest text-[#E11D2E]">
-                Temporary Live File Sharing
+                Online Sharing (Live P2P)
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
@@ -505,7 +505,7 @@ export default function OnlineLiveShare({
               }`}
             >
               <Radio className="w-3.5 h-3.5" />
-              <span>Share Live (Owner)</span>
+              <span>Share File (Owner)</span>
             </button>
             <button
               type="button"
@@ -517,7 +517,7 @@ export default function OnlineLiveShare({
               }`}
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Receive File</span>
+              <span>Receive File (Recipient)</span>
             </button>
           </div>
         </div>
@@ -626,6 +626,111 @@ export default function OnlineLiveShare({
                 )}
               </div>
 
+              {/* Online Sharing Parameters */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-[#0E0E10] border border-[#27272A] space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-[#27272A]/70">
+                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#E11D2E]" />
+                    <span>Live Session Parameters</span>
+                  </label>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-950/60 border border-red-800/40 text-red-300">
+                    Active While Browser Online
+                  </span>
+                </div>
+
+                {/* Duration Window */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-[#E11D2E]" />
+                    <span>Live Session Window</span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { minutes: 30, label: '30 Minutes' },
+                      { minutes: 60, label: '1 Hour' },
+                      { minutes: 120, label: '2 Hours' },
+                      { minutes: 240, label: '4 Hours' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.minutes}
+                        type="button"
+                        onClick={() => setLiveDurationMinutes(opt.minutes)}
+                        className={`py-2 px-3 rounded-lg text-xs font-medium border transition-all cursor-pointer text-center ${
+                          liveDurationMinutes === opt.minutes
+                            ? 'bg-[#E11D2E] border-[#E11D2E] text-white shadow-sm'
+                            : 'bg-[#18181B] border-[#27272A] text-zinc-400 hover:text-white hover:border-[#3F3F46]'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Maximum Completed Transfers */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1">
+                    <Users className="w-3 h-3 text-[#E11D2E]" />
+                    <span>Maximum Completed Transfers</span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { limit: 1, label: '1 Recipient (Single-Use)' },
+                      { limit: 3, label: '3 Recipients' },
+                      { limit: 5, label: '5 Recipients' },
+                      { limit: 'unlimited', label: 'Unlimited (While Online)' },
+                    ].map((opt) => (
+                      <button
+                        key={String(opt.limit)}
+                        type="button"
+                        onClick={() => setMaxDownloadsLimit(opt.limit)}
+                        className={`py-2 px-2.5 rounded-lg text-xs font-medium border transition-all cursor-pointer text-center truncate ${
+                          maxDownloadsLimit === opt.limit
+                            ? 'bg-[#E11D2E] border-[#E11D2E] text-white shadow-sm'
+                            : 'bg-[#18181B] border-[#27272A] text-zinc-400 hover:text-white hover:border-[#3F3F46]'
+                        }`}
+                        title={opt.label}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Auto-End After 1st Transfer (Burn on Finish) */}
+                <div className="flex items-center justify-between p-3 rounded-xl bg-[#18181B] border border-[#27272A]">
+                  <div className="space-y-0.5 pr-3">
+                    <span className="text-xs font-medium text-white flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-[#E11D2E]" />
+                      <span>Auto-End After 1st Transfer (Burn on Finish)</span>
+                    </span>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      Instantly terminates the live P2P sharing session and destroys the 6-character access code as soon as the first recipient finishes downloading.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={burnOnFinish}
+                      onChange={(e) => setBurnOnFinish(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#E11D2E]"></div>
+                  </label>
+                </div>
+
+                {/* Sharing Plan Summary */}
+                <div className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-400">
+                  <div className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-[#E11D2E]" />
+                    <span>
+                      Sharing Plan: <strong className="text-white">Online Sharing</strong> · {liveDurationMinutes < 60 ? `${liveDurationMinutes} mins` : `${liveDurationMinutes / 60} hour(s)`} · {maxDownloadsLimit === 'unlimited' ? 'Unlimited recipients' : `${maxDownloadsLimit} max recipient(s)`}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-zinc-500 font-mono">Zero Cloud · WebRTC P2P</span>
+                </div>
+              </div>
+
               {ownerError && (
                 <div className="p-3.5 rounded-xl bg-red-950/30 border border-red-800/40 text-red-300 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -648,7 +753,7 @@ export default function OnlineLiveShare({
                 ) : (
                   <>
                     <Radio className="w-4 h-4" />
-                    <span>Generate Access Code & Start Live Share</span>
+                    <span>Generate Access Code & Start Online Share</span>
                   </>
                 )}
               </button>
@@ -696,7 +801,7 @@ export default function OnlineLiveShare({
                       <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                     </span>
                     <span className="text-xs font-bold text-white uppercase tracking-wider">
-                      Live Sharing State
+                      Online Sharing State
                     </span>
                   </div>
 

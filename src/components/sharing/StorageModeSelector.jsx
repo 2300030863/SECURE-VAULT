@@ -1,16 +1,16 @@
 import React from 'react';
 import { Clock, HardDrive, Check, Sparkles, Radio } from 'lucide-react';
 
-export default function StorageModeSelector({ storageMode, onChange, onSwitchToLive }) {
+export default function StorageModeSelector({ storageMode, onChange, onSwitchToOnlineShare }) {
   const modes = [
     {
       id: 'temporary',
       name: 'Temporary Storage',
-      tagline: 'Quick Auto-Expiring',
+      tagline: 'Auto-Expiring Cloud Vault',
       description: 'Files are encrypted and stored in Backblaze B2, automatically purging after your selected expiration period.',
       icon: Clock,
       badge: 'B2 Auto-Purge',
-      badgeColor: 'text-zinc-300 bg-zinc-800 border-zinc-700',
+      badgeColor: 'text-zinc-400 bg-zinc-800 border-zinc-700',
       activeRing: 'border-zinc-500 bg-zinc-900/60',
     },
     {
@@ -45,14 +45,14 @@ export default function StorageModeSelector({ storageMode, onChange, onSwitchToL
               type="button"
               key={mode.id}
               onClick={() => onChange(mode.id)}
-              className={`p-3.5 rounded-xl text-left border transition-all cursor-pointer relative flex flex-col justify-between ${
+              className={`p-4 rounded-xl text-left border transition-all cursor-pointer relative flex flex-col justify-between ${
                 isSelected
                   ? `${mode.activeRing} ring-1 ring-[#E11D2E]/50`
                   : 'bg-[#121215] border-[#27272A] hover:border-[#3F3F46] hover:bg-[#18181B]'
               }`}
             >
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2.5">
                   <div
                     className={`w-8 h-8 rounded-lg flex items-center justify-center border ${
                       isSelected
@@ -70,7 +70,7 @@ export default function StorageModeSelector({ storageMode, onChange, onSwitchToL
                 </div>
 
                 <div className="font-semibold text-xs text-white mb-0.5">{mode.name}</div>
-                <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed mb-2.5">
+                <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed mb-3">
                   {mode.description}
                 </p>
               </div>
@@ -87,21 +87,19 @@ export default function StorageModeSelector({ storageMode, onChange, onSwitchToL
         })}
       </div>
 
-      {/* Switch to Live Sharing P2P Callout */}
-      {onSwitchToLive && (
-        <div className="p-3 rounded-xl bg-gradient-to-r from-red-950/30 to-zinc-900 border border-red-900/40 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2 text-zinc-300">
-            <Radio className="w-4 h-4 text-[#E11D2E] shrink-0 animate-pulse" />
-            <span>
-              Looking for direct P2P transfer with <strong className="text-white">zero cloud storage</strong> and <strong className="text-white">no 250MB limit</strong>?
-            </span>
+      {/* 1-Click Switch to Online Sharing banner */}
+      {onSwitchToOnlineShare && (
+        <div className="p-3 rounded-xl bg-gradient-to-r from-red-950/30 via-zinc-950 to-zinc-900 border border-red-900/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-zinc-300">
+          <div className="flex items-center gap-2">
+            <Radio className="w-4 h-4 text-[#E11D2E] animate-pulse shrink-0" />
+            <span>Looking for direct P2P transfer with <strong>zero cloud storage</strong> and <strong>no 250MB limit</strong>?</span>
           </div>
           <button
             type="button"
-            onClick={onSwitchToLive}
-            className="shrink-0 px-2.5 py-1 rounded-lg bg-[#E11D2E] hover:bg-[#FF2E44] text-white font-semibold text-[11px] transition-all cursor-pointer shadow-sm"
+            onClick={onSwitchToOnlineShare}
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-[#E11D2E] hover:bg-[#c91827] text-white font-semibold text-xs transition-all cursor-pointer shadow-sm"
           >
-            Switch to Live Sharing (P2P)
+            Switch to Online Sharing (P2P)
           </button>
         </div>
       )}

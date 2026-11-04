@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, Shield, ArrowRight, FolderLock, User, Radio } from 'lucide-react';
+import { Menu, X, Shield, ArrowRight, FolderLock, User } from 'lucide-react';
 import Logo from './Logo';
 import UserProfileModal from './UserProfileModal';
 
@@ -38,18 +38,7 @@ export default function Navbar({ isAuthenticated = false, currentUser = null, on
               <span>Document Vault</span>
             </NavLink>
           </li>
-          <li>
-            <NavLink
-              to="/online-share"
-              className={({ isActive }) => `sv-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <Radio size={15} className="text-[#E11D2E]" />
-              <span>Live Share</span>
-              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-red-950/60 border border-[#E11D2E]/40 text-[#E11D2E]">
-                P2P
-              </span>
-            </NavLink>
-          </li>
+
           {isAuthenticated && currentUser?.role === 'admin' && (
             <li>
               <NavLink
@@ -183,14 +172,7 @@ export default function Navbar({ isAuthenticated = false, currentUser = null, on
           <FolderLock size={16} />
           <span>Document Vault</span>
         </NavLink>
-        <NavLink
-          to="/online-share"
-          className={({ isActive }) => `sv-nav-link ${isActive ? 'active' : ''}`}
-          onClick={handleLinkClick}
-        >
-          <Radio size={16} className="text-[#E11D2E]" />
-          <span>Live P2P Share</span>
-        </NavLink>
+
         {isAuthenticated && currentUser?.role === 'admin' && (
           <NavLink
             to="/admin"

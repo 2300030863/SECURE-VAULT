@@ -49,7 +49,6 @@ import {
   Send,
 } from 'lucide-react';
 import StorageModeSelector from '../components/sharing/StorageModeSelector';
-import OnlineSharingSettings from '../components/sharing/OnlineSharingSettings';
 import TemporaryStorageSettings from '../components/sharing/TemporaryStorageSettings';
 import MySharedDocuments from '../components/sharing/MySharedDocuments';
 import AiDocumentModal from '../components/ai/AiDocumentModal';
@@ -86,8 +85,8 @@ export default function VaultDashboard({ currentUser }) {
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
 
   // Upload & Storage Mode State
-  const [entryMode, setEntryMode] = useState('file'); // 'file' | 'live' | 'text'
-  const [storageMode, setStorageMode] = useState('temporary'); // 'temporary' | 'long_term'
+  const [entryMode, setEntryMode] = useState('file'); // 'file' | 'text'
+  const [storageMode, setStorageMode] = useState('online'); // 'online' | 'temporary' | 'long_term'
   const [maxDownloads, setMaxDownloads] = useState(5); // 1 | 5 | 10 | 'unlimited'
   const [deleteAfterDownload, setDeleteAfterDownload] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -96,7 +95,7 @@ export default function VaultDashboard({ currentUser }) {
   const [documentName, setDocumentName] = useState('');
   const [textContent, setTextContent] = useState('');
   const [textTitle, setTextTitle] = useState('');
-  const [expiryOption, setExpiryOption] = useState('24h');
+  const [expiryOption, setExpiryOption] = useState('2h');
   const [customMode, setCustomMode] = useState('duration'); // 'duration' | 'date'
   const [customDurationValue, setCustomDurationValue] = useState(3);
   const [customDurationUnit, setCustomDurationUnit] = useState('d'); // 'm' | 'h' | 'd' | 'w' | 'mo'
@@ -354,12 +353,9 @@ export default function VaultDashboard({ currentUser }) {
       return;
     }
 
-    // When Online Sharing is selected for files, seamlessly launch Live Online Share (WebRTC P2P)!
-    // ZERO cloud storage. ZERO disk writes. NO 250MB file size limit!
-    if (storageMode === 'online' && entryMode === 'file' && selectedFiles.length > 0) {
-      setLiveShareInitialFile(selectedFiles[0]);
-      setLiveShareAutoStart(true);
-      setEntryMode('live');
+    // File size validation for cloud uploads
+    if (entryMode === 'file' && selectedFiles.some((f) => f.size > 250 * 1024 * 1024)) {
+      setUploadError('One or more files exceed the 250MB cloud upload limit. Switch to Online Sharing for unlimited file size streaming.');
       return;
     }
 
@@ -812,14 +808,14 @@ export default function VaultDashboard({ currentUser }) {
                   <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                     <span>
                       {entryMode === 'live'
-                        ? 'Live Temporary Online Sharing'
+                        ? 'Online Sharing (Live P2P)'
                         : entryMode === 'file'
                         ? 'Upload & Encrypt Documents'
                         : 'Send Confidential Secret Note'}
                     </span>
                     {entryMode === 'live' && (
                       <span className="text-[10px] font-mono bg-red-950 text-red-400 border border-red-800/60 px-2 py-0.5 rounded-full font-bold">
-                        P2P · No 250MB Limit
+                        P2P · No File Limit
                       </span>
                     )}
                   </h2>
@@ -865,7 +861,7 @@ export default function VaultDashboard({ currentUser }) {
                 }`}
               >
                 <Radio className={`w-3.5 h-3.5 ${entryMode === 'live' ? 'text-[#E11D2E] animate-pulse' : 'text-zinc-500'}`} />
-                <span className="truncate">Live Sharing</span>
+                <span className="truncate">Online Sharing</span>
                 <span className="text-[9px] bg-red-950 text-red-400 border border-red-800/60 px-1.5 py-0.2 rounded font-mono font-bold">
                   P2P
                 </span>
@@ -1183,15 +1179,15 @@ export default function VaultDashboard({ currentUser }) {
                       </span>
                       <span className="text-[11px] text-zinc-400 block truncate">
                         {storageMode === 'temporary'
-                          ? `Temporary Auto-Purge (${expiryOption}) · Backblaze B2`
-                          : 'Long-Term Storage · Permanent retention · Backblaze B2'}
+                          ? `Temporary Auto-Purge (${expiryOption})`
+                          : 'Long-Term Storage · Permanent retention'}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300">
-                      {storageMode === 'temporary' ? 'Temp Auto-Purge' : 'Long-Term Vault'}
+                      {storageMode === 'temporary' ? 'Temp Auto-Purge' : 'Long-Term'}
                     </span>
                     {showSettingsAccordion ? (
                       <ChevronUp className="w-4 h-4 text-zinc-400" />
@@ -1217,7 +1213,12 @@ export default function VaultDashboard({ currentUser }) {
                           setDeleteAfterDownload(false);
                         }
                       }}
-                      onSwitchToLive={() => setEntryMode('live')}
+                      onSwitchToOnlineShare={() => {
+                        if (selectedFiles.length > 0) {
+                          setLiveShareInitialFile(selectedFiles[0]);
+                        }
+                        setEntryMode('live');
+                      }}
                     />
 
                     {storageMode === 'long_term' ? (
@@ -1274,46 +1275,28 @@ export default function VaultDashboard({ currentUser }) {
                 </div>
               )}
 
-              {/* Live Online Sharing Info Callout (Zero Server Storage · No Size Limit) */}
-              {storageMode === 'online' && entryMode === 'file' && (
-                <div className="p-3.5 rounded-xl bg-gradient-to-r from-red-950/40 via-zinc-950 to-zinc-900 border border-red-500/40 text-xs text-zinc-300 flex items-start gap-3 shadow-md shadow-red-950/20 animate-in fade-in duration-150">
-                  <div className="w-8 h-8 rounded-lg bg-red-950/80 border border-red-600/40 flex items-center justify-center shrink-0 text-[#E11D2E]">
-                    <Radio className="w-4 h-4 animate-pulse" />
-                  </div>
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-white font-bold tracking-tight">Live P2P Online Sharing</span>
-                      <span className="text-[10px] bg-red-900/60 text-red-300 border border-red-700/60 px-2 py-0.5 rounded-full font-mono font-medium">
-                        No 250MB Limit · Unlimited File Size
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      Files of any size (e.g. 3.8 GB, 10 GB+) stream directly from your browser memory to the recipient over encrypted WebRTC DataChannel. Zero cloud storage, zero disk writes, completely private.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Cloud Limit Warning for Non-Online Modes */}
+              {/* Cloud Limit Warning when file > 250MB */}
               {entryMode === 'file' &&
-                storageMode !== 'online' &&
                 selectedFiles.some((f) => f.size > 250 * 1024 * 1024) && (
-                  <div className="p-3.5 rounded-xl bg-amber-950/50 border border-amber-600/50 text-xs text-amber-200 flex items-start justify-between gap-3 animate-in fade-in duration-150">
+                  <div className="p-3.5 rounded-xl bg-amber-950/50 border border-amber-600/50 text-xs text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-150">
                     <div className="flex items-start gap-2.5">
                       <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                       <div className="space-y-0.5">
                         <div className="font-bold text-amber-300">File Exceeds 250MB Cloud Storage Limit</div>
                         <p className="text-[11px] text-amber-200/80 leading-relaxed">
-                          Permanent and Temporary B2 cloud storage cap files at 250MB. Switch to Live Online Sharing for unlimited file size via direct P2P streaming.
+                          Permanent and Temporary B2 cloud storage cap files at 250MB. Switch to Online Sharing for unlimited file size via direct P2P streaming.
                         </p>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setStorageMode('online')}
-                      className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-bold transition-all cursor-pointer shadow-sm"
+                      onClick={() => {
+                        setLiveShareInitialFile(selectedFiles[0]);
+                        setEntryMode('live');
+                      }}
+                      className="shrink-0 px-3.5 py-1.5 rounded-lg bg-[#E11D2E] hover:bg-[#c91827] text-white text-xs font-bold transition-all cursor-pointer shadow-sm"
                     >
-                      Switch to Online Share
+                      Switch to Online Sharing
                     </button>
                   </div>
                 )}
@@ -1334,7 +1317,6 @@ export default function VaultDashboard({ currentUser }) {
                     ((entryMode === 'file' ? selectedFiles.length === 0 : !textContent.trim()) ||
                       isUploading ||
                       (entryMode === 'file' &&
-                        storageMode !== 'online' &&
                         selectedFiles.some((f) => f.size > 250 * 1024 * 1024)))
                 )}
                 className={`w-full py-3 px-4 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.99] cursor-pointer ${
@@ -1352,11 +1334,6 @@ export default function VaultDashboard({ currentUser }) {
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
                     <span>Encrypting & Generating Code...</span>
-                  </>
-                ) : storageMode === 'online' && entryMode === 'file' ? (
-                  <>
-                    <Radio className="w-4 h-4 text-white animate-pulse" />
-                    <span>Generate Access Code & Start Live Share (No Limit)</span>
                   </>
                 ) : (
                   <>
