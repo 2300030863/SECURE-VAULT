@@ -12,8 +12,7 @@ export default function AdminLogin() {
   const [error, setError] = useState("");
 
   const fillDefaultCredentials = () => {
-    setEmail("admin@docqevrilo.com");
-    setPassword("Admin@DocQevrilo2026!");
+    setEmail("siveshkommalapati9652@gmail.com");
     setError("");
   };
 
@@ -81,7 +80,7 @@ export default function AdminLogin() {
               id="admin-email"
               type="email"
               autoComplete="username"
-              placeholder="admin@docqevrilo.com"
+              placeholder="siveshkommalapati9652@gmail.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -110,18 +109,17 @@ export default function AdminLogin() {
         <div className="admin-demo-creds">
           <div className="admin-demo-creds-title">
             <KeyRound size={14} />
-            <span>Default Administrator Credentials</span>
+            <span>Designated Administrator</span>
           </div>
           <div className="admin-demo-creds-body">
-            <div>Email: <code>admin@docqevrilo.com</code></div>
-            <div>Password: <code>Admin@DocQevrilo2026!</code></div>
+            <div>Authorized Admin: <code>siveshkommalapati9652@gmail.com</code></div>
           </div>
           <button
             type="button"
             className="admin-autofill-btn"
             onClick={fillDefaultCredentials}
           >
-            <Sparkles size={14} /> Auto-fill credentials
+            <Sparkles size={14} /> Auto-fill admin email
           </button>
         </div>
 
