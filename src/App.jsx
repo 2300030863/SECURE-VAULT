@@ -25,6 +25,8 @@ import OnlineShare from './pages/OnlineShare';
 import NotFound from './pages/NotFound';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 
 // Import Auth Service & API Configuration
 import { authService } from './services/authService';
@@ -167,6 +169,10 @@ export default function App() {
             <Route path="/vault" element={<VaultDashboard currentUser={currentUser} />} />
             <Route path="/online-share" element={<OnlineShare currentUser={currentUser} />} />
             <Route path="/live-share" element={<OnlineShare currentUser={currentUser} />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/terms-of-service" element={<TermsOfService />} />
             <Route path="/dashboard" element={<Navigate to="/vault" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -144,7 +144,10 @@ export default function Footer({ currentUser }) {
                 <a href="/#user-workflow">User Workflow</a>
               </li>
               <li>
-                <a href="/#security">Privacy &amp; Security</a>
+                <Link to="/privacy">Privacy Policy</Link>
+              </li>
+              <li>
+                <Link to="/terms">Terms of Service</Link>
               </li>
               <li>
                 <a href="/#faq">FAQs</a>
@@ -268,9 +271,9 @@ export default function Footer({ currentUser }) {
           </div>
 
           <div className="sv-footer-legal">
-            <a href="/#security" className="sv-footer-legal-link">Privacy Policy</a>
+            <Link to="/privacy" className="sv-footer-legal-link">Privacy Policy</Link>
             <span className="sv-footer-legal-bullet">&bull;</span>
-            <a href="/#about" className="sv-footer-legal-link">Terms of Service</a>
+            <Link to="/terms" className="sv-footer-legal-link">Terms of Service</Link>
           </div>
         </div>
       </div>

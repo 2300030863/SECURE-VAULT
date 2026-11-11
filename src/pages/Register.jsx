@@ -759,8 +759,27 @@ export default function Register() {
                     aria-invalid={Boolean(errors.agreeTerms)}
                   />
                   <span>
-                    I agree to the Terms of Service and Privacy Policy for zero-knowledge data
-                    retention.
+                    I agree to the{' '}
+                    <Link
+                      to="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#E11D2E] underline hover:text-red-400 font-medium transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Terms of Service
+                    </Link>{' '}
+                    and{' '}
+                    <Link
+                      to="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#E11D2E] underline hover:text-red-400 font-medium transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Privacy Policy
+                    </Link>{' '}
+                    for zero-knowledge data retention.
                   </span>
                 </label>
                 {errors.agreeTerms && (
