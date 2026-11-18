@@ -10,6 +10,8 @@ import {
   Briefcase,
   KeyRound,
   Check,
+  CheckCircle2,
+  Clock,
   RefreshCw,
   AlertCircle,
   X,
@@ -48,6 +50,9 @@ export default function Register() {
   const [otpAttemptsRemaining, setOtpAttemptsRemaining] = useState(3);
   const [isOtpLocked, setIsOtpLocked] = useState(false);
   const [lockoutMinutes, setLockoutMinutes] = useState(20);
+  const [otpCountdownSeconds, setOtpCountdownSeconds] = useState(600); // 10 minutes limit
+  const [autoFilledOtp, setAutoFilledOtp] = useState(false);
+  const [isOtpExpired, setIsOtpExpired] = useState(false);
 
   // Fallback state for users arriving with ?verify=email parameter
   const [verificationEmail, setVerificationEmail] = useState('');
@@ -55,12 +60,97 @@ export default function Register() {
   const [verificationStatus, setVerificationStatus] = useState(null);
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
 
+  const formatTimer = (totalSecs) => {
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Read URL parameters: ?email=...&otp=...&exp=... (supports 1-click verification from email link)
   useEffect(() => {
-    const verifyParam = searchParams.get('verify');
-    if (verifyParam) {
-      setVerificationEmail(verifyParam.trim().toLowerCase());
+    const emailParam = searchParams.get('email') || searchParams.get('verify');
+    const otpParam = searchParams.get('otp') || searchParams.get('code');
+    const expParam = searchParams.get('exp');
+
+    if (emailParam) {
+      const cleanEmail = emailParam.trim().toLowerCase();
+      setFormData((prev) => ({ ...prev, email: cleanEmail }));
+      setVerificationEmail(cleanEmail);
+
+      if (otpParam) {
+        const cleanOtp = otpParam.trim();
+        setInlineOtp(cleanOtp);
+        setShowOtpBox(true);
+        setAutoFilledOtp(true);
+
+        if (expParam) {
+          const diffSecs = Math.floor((parseInt(expParam, 10) - Date.now()) / 1000);
+          if (diffSecs <= 0) {
+            setIsOtpExpired(true);
+            setOtpCountdownSeconds(0);
+            setInlineOtpStatus({
+              type: 'error',
+              text: '⚠️ Verification link expired: This 6-digit code has expired after 10 minutes. Click "Resend Code" to receive a fresh verification code.',
+            });
+            return;
+          } else {
+            setOtpCountdownSeconds(diffSecs);
+          }
+        } else {
+          setOtpCountdownSeconds(600);
+        }
+
+        // Auto-verify if 6 digits and not expired
+        if (/^\d{6}$/.test(cleanOtp)) {
+          authService.verifyEmailOtp(cleanEmail, cleanOtp)
+            .then((res) => {
+              setIsEmailVerified(true);
+              setVerificationProof(res.verificationProof);
+              setShowOtpBox(false);
+              setInlineOtp('');
+              setInlineOtpStatus(null);
+              setErrors((prev) => ({ ...prev, email: '' }));
+              setStatusMessage({
+                type: 'success',
+                message: '✓ Email automatically verified from your email link! Please complete the registration form below.',
+              });
+            })
+            .catch((err) => {
+              const msg = err.message?.toLowerCase() || '';
+              if (msg.includes('expired')) {
+                setIsOtpExpired(true);
+              }
+              setInlineOtpStatus({
+                type: 'error',
+                text: err.message || 'Verification link expired or invalid. Please click Resend Code.',
+              });
+            });
+        }
+      }
     }
   }, [searchParams]);
+
+  // Active 1-second countdown for the 10-minute inline OTP time limit
+  useEffect(() => {
+    if (!showOtpBox || isEmailVerified || isOtpExpired) return;
+
+    const timer = setInterval(() => {
+      setOtpCountdownSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setIsOtpExpired(true);
+          setInlineOtpStatus({
+            type: 'error',
+            text: '⚠️ Verification code expired (10-minute time limit). Please click Resend Code.',
+          });
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [showOtpBox, isEmailVerified, isOtpExpired]);
 
   const validate = () => {
     const newErrors = {};
@@ -162,6 +252,9 @@ export default function Register() {
     try {
       const res = await authService.sendEmailOtp(cleanEmail);
       setShowOtpBox(true);
+      setOtpCountdownSeconds(600);
+      setIsOtpExpired(false);
+      setAutoFilledOtp(false);
       if (typeof res.attemptsRemaining === 'number') {
         setOtpAttemptsRemaining(res.attemptsRemaining);
       }
@@ -170,7 +263,7 @@ export default function Register() {
       }
       setInlineOtpStatus({
         type: res.emailSent === false ? 'warning' : 'success',
-        text: res.warning || res.message || `A 6-digit verification code has been sent to ${cleanEmail}.`,
+        text: res.warning || res.message || `A 6-digit verification code has been sent to ${cleanEmail}. (Valid for 10 mins)`,
       });
     } catch (err) {
       setShowOtpBox(true);
@@ -541,21 +634,47 @@ export default function Register() {
                         <KeyRound size={13} />
                         <span>Email Verification Code</span>
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowOtpBox(false)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#71717a',
-                          cursor: 'pointer',
-                          padding: 0,
-                        }}
-                        aria-label="Close verification box"
-                      >
-                        <X size={14} />
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            background: isOtpExpired || otpCountdownSeconds < 60 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                            color: isOtpExpired || otpCountdownSeconds < 60 ? '#ef4444' : '#fca5a5',
+                            fontFamily: 'monospace',
+                            fontWeight: 700,
+                          }}
+                        >
+                          <Clock size={12} />
+                          <span>{isOtpExpired ? 'Expired' : formatTimer(otpCountdownSeconds)}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowOtpBox(false)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#71717a',
+                            cursor: 'pointer',
+                            padding: 0,
+                          }}
+                          aria-label="Close verification box"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
                     </div>
+
+                    {autoFilledOtp && !isOtpExpired && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#34d399', fontSize: '11px', fontWeight: 600, margin: '4px 0 6px' }}>
+                        <CheckCircle2 size={13} />
+                        <span>Code automatically pre-filled from your email link!</span>
+                      </div>
+                    )}
 
                     <p className="sv-inline-otp-note">
                       {inlineOtpStatus?.type === 'success' ? (
@@ -564,7 +683,7 @@ export default function Register() {
                         <span style={{ color: '#fbbf24' }}>{inlineOtpStatus.text}</span>
                       ) : (
                         <>
-                          Enter the 6-digit code sent to <strong>{formData.email.trim()}</strong>.
+                          Enter the 6-digit code sent to <strong>{formData.email.trim()}</strong>. Valid for 10 minutes.
                         </>
                       )}
                     </p>
@@ -583,13 +702,17 @@ export default function Register() {
                         placeholder="000000"
                         className="sv-inline-otp-input"
                         autoFocus
-                        disabled={isVerifyingInlineOtp}
+                        disabled={isVerifyingInlineOtp || isOtpExpired}
                       />
                       <button
                         type="button"
                         onClick={handleVerifyInlineOtp}
-                        disabled={isVerifyingInlineOtp || inlineOtp.trim().length !== 6}
+                        disabled={isVerifyingInlineOtp || inlineOtp.trim().length !== 6 || isOtpExpired}
                         className="sv-inline-otp-verify-btn"
+                        style={{
+                          opacity: isOtpExpired ? 0.5 : 1,
+                          cursor: isOtpExpired ? 'not-allowed' : 'pointer',
+                        }}
                       >
                         {isVerifyingInlineOtp ? 'Verifying...' : 'Verify OTP'}
                       </button>
@@ -615,6 +738,8 @@ export default function Register() {
                       <span>
                         {isOtpLocked
                           ? `Locked for ${lockoutMinutes}m`
+                          : isOtpExpired
+                          ? 'Code expired after 10m'
                           : `${otpAttemptsRemaining} attempt${otpAttemptsRemaining === 1 ? '' : 's'} left (max 3)`}
                       </span>
                       <button

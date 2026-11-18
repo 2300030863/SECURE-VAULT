@@ -251,7 +251,11 @@ export const authService = {
     return {
       success: true,
       message: data.message || 'If an account exists for that email, a 6-digit OTP code has been sent.',
-      email: data.email,
+      email: data.email || email,
+      expiresInMinutes: data.expiresInMinutes || 15,
+      expiresTimestamp: data.expiresTimestamp || Date.now() + 15 * 60 * 1000,
+      devOtp: data.devOtp,
+      emailSent: data.emailSent,
     };
   },
 
