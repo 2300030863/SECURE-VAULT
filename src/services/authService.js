@@ -260,6 +260,24 @@ export const authService = {
   },
 
   /**
+   * Validate password reset token before displaying the reset password form
+   * @param {string} token
+   */
+  async verifyResetToken(token) {
+    const params = new URLSearchParams();
+    if (token) params.set('token', token.trim());
+    const response = await fetch(`${API_BASE_URL}/auth/verify-reset-token?${params.toString()}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const err = new Error(data.message || 'This reset link has expired or has already been used.');
+      err.expired = true;
+      err.isUsed = Boolean(data.isUsed);
+      throw err;
+    }
+    return data;
+  },
+
+  /**
    * Reset user password using token OR (email + 6-digit OTP)
    * @param {Object} payload { token, email, otp, password }
    */

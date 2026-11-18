@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Mail, KeyRound, ArrowRight, ArrowLeft, Home, CheckCircle2, Clock, AlertCircle, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Mail, KeyRound, ArrowRight, ArrowLeft, Home, CheckCircle2, Clock, ShieldCheck, RefreshCw } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
 import FormMessage from '../components/FormMessage';
 import { authService } from '../services/authService';
@@ -13,9 +13,6 @@ export default function ForgotPassword() {
   const [isLocked, setIsLocked] = useState(false);
   const [lockoutMinutes, setLockoutMinutes] = useState(20);
   const [countdownSeconds, setCountdownSeconds] = useState(15 * 60); // 15 minutes countdown
-  const [autoRedirectSeconds, setAutoRedirectSeconds] = useState(6);
-  const [autoRedirectActive, setAutoRedirectActive] = useState(true);
-  const navigate = useNavigate();
 
   // Active 15-minute countdown once email is dispatched
   useEffect(() => {
@@ -34,24 +31,6 @@ export default function ForgotPassword() {
     return () => clearInterval(timer);
   }, [resultData]);
 
-  // Subtle auto-redirect countdown to make the transition smooth
-  useEffect(() => {
-    if (!resultData || !autoRedirectActive) return;
-
-    if (autoRedirectSeconds <= 0) {
-      const targetEmail = resultData.email || email.trim();
-      const expParam = resultData.expiresTimestamp ? `&exp=${resultData.expiresTimestamp}` : '';
-      navigate(`/reset-password?email=${encodeURIComponent(targetEmail)}${expParam}`);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setAutoRedirectSeconds((prev) => prev - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [resultData, autoRedirectSeconds, autoRedirectActive, email, navigate]);
-
   const formatTimer = (totalSecs) => {
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
@@ -59,9 +38,8 @@ export default function ForgotPassword() {
   };
 
   async function handleSubmit(event) {
-    event.preventDefault();
+    if (event?.preventDefault) event.preventDefault();
     setStatusMessage(null);
-    setResultData(null);
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
@@ -90,8 +68,6 @@ export default function ForgotPassword() {
         email: targetEmail,
       });
       setCountdownSeconds(15 * 60);
-      setAutoRedirectSeconds(6);
-      setAutoRedirectActive(true);
       setStatusMessage({
         type: 'success',
         message: `Password reset email dispatched to ${targetEmail}. Check your inbox!`,
@@ -117,12 +93,6 @@ export default function ForgotPassword() {
     }
   }
 
-  const handleProceedToReset = () => {
-    const targetEmail = resultData?.email || email.trim();
-    const expParam = resultData?.expiresTimestamp ? `&exp=${resultData.expiresTimestamp}` : '';
-    navigate(`/reset-password?email=${encodeURIComponent(targetEmail)}${expParam}`);
-  };
-
   return (
     <div className="sv-page-wrapper auth-page">
       <div className="sv-auth-container">
@@ -140,7 +110,7 @@ export default function ForgotPassword() {
             </div>
             <h1 className="sv-auth-title">Forgot Password?</h1>
             <p className="sv-auth-subtitle">
-              Enter your registered email address to receive a time-limited 6-digit OTP code &amp; direct reset link.
+              Enter your registered email address to receive a secure, time-limited reset verification link.
             </p>
           </div>
 
@@ -203,45 +173,44 @@ export default function ForgotPassword() {
                 </div>
               )}
 
-              <p style={{ fontSize: '0.85rem', color: '#a1a1aa', marginBottom: '1.25rem', lineHeight: 1.5 }}>
-                We sent a 6-digit verification code and 1-click auto-fill link to your email. Click below to enter your OTP and choose a new password.
-              </p>
-
-              <button
-                type="button"
-                onClick={handleProceedToReset}
-                className="sv-btn-primary"
-                style={{ width: '100%', marginBottom: '0.75rem', padding: '0.85rem 1rem' }}
-              >
-                <span>Proceed to Reset Page</span>
-                <ArrowRight size={16} />
-              </button>
-
-              {autoRedirectActive && autoRedirectSeconds > 0 && (
-                <div style={{ fontSize: '12px', color: '#71717a', marginBottom: '0.85rem' }}>
-                  Automatically taking you to reset page in <strong style={{ color: '#ffffff' }}>{autoRedirectSeconds}s</strong>...{' '}
-                  <button
-                    type="button"
-                    onClick={() => setAutoRedirectActive(false)}
-                    style={{ background: 'transparent', border: 0, color: '#ef4444', cursor: 'pointer', textDecoration: 'underline', fontSize: '11px', padding: 0 }}
-                  >
-                    stay here
-                  </button>
+              {/* Security Directive Notice */}
+              <div style={{ background: 'rgba(225, 29, 46, 0.08)', border: '1px solid rgba(225, 29, 46, 0.25)', borderRadius: '12px', padding: '14px 16px', margin: '1rem 0 1.25rem', textAlign: 'left' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fca5a5', fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>
+                  <ShieldCheck size={16} className="text-[#ef4444]" />
+                  <span>Email Verification Link Required</span>
                 </div>
-              )}
+                <p style={{ margin: 0, fontSize: '12px', color: '#d4d4d8', lineHeight: 1.5 }}>
+                  For your security, your password can <strong>only be reset by clicking the direct verification link</strong> sent to your email.
+                </p>
+                <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#a1a1aa' }}>
+                  ⏱️ The link will expire strictly after <strong>15 minutes</strong> or immediately once your password is updated.
+                </p>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setResultData(null);
-                  setStatusMessage(null);
-                  setAutoRedirectActive(false);
-                }}
-                className="sv-btn-secondary"
-                style={{ width: '100%' }}
-              >
-                <span>Change Email or Resend</span>
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={loading || isLocked}
+                  className="sv-btn-primary"
+                  style={{ width: '100%', padding: '0.8rem 1rem' }}
+                >
+                  <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+                  <span>{loading ? 'Resending Link...' : 'Resend Email Link'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResultData(null);
+                    setStatusMessage(null);
+                  }}
+                  className="sv-btn-secondary"
+                  style={{ width: '100%' }}
+                >
+                  <span>Use a Different Email</span>
+                </button>
+              </div>
             </div>
           ) : (
             <form className="sv-form" onSubmit={handleSubmit} noValidate>
@@ -270,7 +239,7 @@ export default function ForgotPassword() {
               <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '1.25rem', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                 <Clock size={15} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
                 <span style={{ fontSize: '12px', color: '#d4d4d8', lineHeight: 1.4 }}>
-                  Password reset codes and verification links are protected with a strict <strong>15-minute time limit</strong>.
+                  Password reset links are protected with a strict <strong>15-minute time limit</strong> and can only be accessed via the email link.
                 </span>
               </div>
 
@@ -283,13 +252,13 @@ export default function ForgotPassword() {
                 {loading ? (
                   <>
                     <div className="sv-spinner" aria-hidden="true" />
-                    <span>Dispatching OTP to Email...</span>
+                    <span>Dispatching Link to Email...</span>
                   </>
                 ) : isLocked ? (
                   <span>Locked ({lockoutMinutes}m Hold)</span>
                 ) : (
                   <>
-                    <span>Send Reset Code &amp; Link</span>
+                    <span>Send Password Reset Link</span>
                     <ArrowRight size={16} />
                   </>
                 )}
