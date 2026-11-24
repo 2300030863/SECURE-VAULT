@@ -1753,7 +1753,7 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                           border: `1px solid ${emailStatus?.grokConfigured ? "rgba(229, 9, 54, 0.35)" : "rgba(113, 113, 122, 0.3)"}`,
                         }}
                       >
-                        {emailStatus?.grokConfigured ? (emailStatus?.aiProvider || "Groq AI Ready") : "AI Setup Needed"}
+                        {emailStatus?.grokConfigured ? (emailStatus?.aiProvider || "Google Gemini Ready") : "AI Setup Needed"}
                       </span>
                       <span
                         style={{
@@ -1772,7 +1772,7 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                   </div>
                 </div>
 
-                {/* Grok AI Email Assistant Card */}
+                {/* Gemini AI Email Assistant Card */}
                 <div className="admin-grok-card">
                   <div className="admin-grok-header">
                     <div className="admin-grok-title">
@@ -1780,7 +1780,7 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                       <span>AI Email Generator</span>
                     </div>
                     <span className="admin-grok-badge ready">
-                      ✨ {emailStatus?.aiProvider || "Groq AI Active"} (.env)
+                      ✨ {emailStatus?.aiProvider || "Google Gemini Active"} (.env)
                     </span>
                   </div>
 

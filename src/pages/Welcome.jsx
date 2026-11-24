@@ -964,7 +964,7 @@ export default function Welcome({ currentUser }) {
               </li>
               <li>
                 <CheckCircle2 size={15} className="text-emerald-400 shrink-0 mt-0.5" />
-                <span><strong>Multimodal Groq AI Assistant:</strong> Summarize and analyze documents, extract diagrams & OCR text from images (Groq Vision), transcribe audio recordings (Groq Whisper), and scan nested ZIP archives.</span>
+                <span><strong>Multimodal Google Gemini AI Assistant:</strong> 11-section document summarizer, extract diagrams & OCR text from images (Gemini Vision), transcribe audio recordings, and scan nested ZIP archives.</span>
               </li>
             </ul>
           </div>

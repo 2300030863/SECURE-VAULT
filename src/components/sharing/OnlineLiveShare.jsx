@@ -18,6 +18,9 @@ import {
   ExternalLink,
   Lock,
   Eye,
+  UserX,
+  CheckCircle2,
+  Activity,
 } from 'lucide-react';
 import { getApiBaseUrl } from '../../config/api';
 import { authService } from '../../services/authService';
@@ -51,18 +54,21 @@ export default function OnlineLiveShare({
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [ownerError, setOwnerError] = useState(null);
+  const [connectedRecipients, setConnectedRecipients] = useState([]); // Array of recipient tracking objects
 
   // ---------------------------------------------------------------------------
   // Recipient State
   // ---------------------------------------------------------------------------
   const [inputCode, setInputCode] = useState(initialAccessCode.toUpperCase());
   const [isConnecting, setIsConnecting] = useState(false);
-  const [connectedFileData, setConnectedFileData] = useState(null); // { fileName, fileSize, mimeType, sessionId, recipientToken }
+  const [connectedFileData, setConnectedFileData] = useState(null); // { fileName, fileSize, mimeType, sessionId, recipientId, recipientToken }
   const [recipientStatus, setRecipientStatus] = useState('idle'); // 'idle' | 'connecting' | 'transferring' | 'complete' | 'offline' | 'error'
   const [recipientStatusMessage, setRecipientStatusMessage] = useState('');
   const [recipientProgress, setRecipientProgress] = useState(null);
   const [downloadedBlobUrl, setDownloadedBlobUrl] = useState(null);
+  const [downloadedSha256, setDownloadedSha256] = useState(null); // { hash, verified }
   const [recipientError, setRecipientError] = useState(null);
+  const [recipientConnectionType, setRecipientConnectionType] = useState('Direct P2P');
 
   // References
   const fileInputRef = useRef(null);
@@ -282,6 +288,9 @@ export default function OnlineLiveShare({
                 : prev
             );
           }
+          if (data.recipients && Array.isArray(data.recipients)) {
+            setConnectedRecipients(data.recipients);
+          }
         } else {
           console.warn('[Heartbeat Error] Session may have been ended.');
         }
@@ -292,7 +301,7 @@ export default function OnlineLiveShare({
   };
 
   /**
-   * Initializes WebRTC DataChannel engine for the owner
+   * Initializes WebRTC DataChannel engine for the owner (Multi-Recipient)
    */
   const initOwnerWebRtc = (sessionId, ownerToken, file) => {
     if (webRtcSessionRef.current) {
@@ -304,7 +313,7 @@ export default function OnlineLiveShare({
       sessionId,
       token: ownerToken,
       file,
-      onStatusChange: ({ status, message }) => {
+      onStatusChange: ({ status, message, recipientId }) => {
         setOwnerStatusMessage(message);
         if (status === 'recipient-connected') {
           setOwnerShareStatus('connecting');
@@ -315,6 +324,27 @@ export default function OnlineLiveShare({
       onProgress: (progress) => {
         setOwnerShareStatus('transferring');
         setOwnerProgress(progress);
+      },
+      onRecipientsUpdate: (recipientsList) => {
+        setConnectedRecipients(recipientsList);
+      },
+      onRecipientJoined: (recipientId) => {
+        setOwnerStatusMessage(`New recipient connected (${recipientId.slice(0, 8)}). Starting stream...`);
+      },
+      onRecipientProgress: (recipientId, progress) => {
+        // Individual progress tracked via onRecipientsUpdate
+      },
+      onRecipientComplete: (recipientId) => {
+        setOwnerStatusMessage(`Recipient ${recipientId.slice(0, 8)} finished download successfully!`);
+        if (burnOnFinish) {
+          setOwnerStatusMessage('Transfer complete! Auto-ending session in 4 seconds (Burn on Finish)...');
+          setTimeout(() => {
+            handleEndSharing();
+          }, 4000);
+        }
+      },
+      onRecipientDisconnected: (recipientId, reason) => {
+        setOwnerStatusMessage(`Recipient ${recipientId.slice(0, 8)} disconnected (${reason || 'closed'}).`);
       },
       onStatsUpdate: (stats) => {
         setActiveSession((prev) =>
@@ -330,16 +360,6 @@ export default function OnlineLiveShare({
       },
       onComplete: () => {
         setOwnerShareStatus('complete');
-        setOwnerStatusMessage(
-          burnOnFinish
-            ? 'Transfer complete! Auto-ending session in 4 seconds (Burn on Finish)...'
-            : 'File transfer completed successfully!'
-        );
-        if (burnOnFinish) {
-          setTimeout(() => {
-            handleEndSession();
-          }, 4000);
-        }
       },
       onError: (errMessage) => {
         setOwnerError(errMessage);
@@ -349,6 +369,18 @@ export default function OnlineLiveShare({
 
     webRtcSessionRef.current = rtcSession;
     rtcSession.start();
+  };
+
+  /**
+   * Disconnects a specific recipient from the owner session
+   */
+  const handleDisconnectRecipient = async (recipientId) => {
+    if (webRtcSessionRef.current) {
+      await webRtcSessionRef.current.disconnectRecipient(recipientId);
+    }
+    setConnectedRecipients((prev) =>
+      prev.map((r) => (r.recipientId === recipientId ? { ...r, status: 'disconnected' } : r))
+    );
   };
 
   /**
@@ -447,6 +479,7 @@ export default function OnlineLiveShare({
 
       setConnectedFileData({
         sessionId: data.sessionId,
+        recipientId: data.recipientId,
         recipientToken: data.recipientToken,
         fileName: data.file.fileName,
         fileSize: data.file.fileSize,
@@ -456,8 +489,8 @@ export default function OnlineLiveShare({
       setRecipientStatus('connecting');
       setRecipientStatusMessage('Owner is online! Establishing encrypted WebRTC connection...');
 
-      // Start WebRTC recipient receiver
-      initRecipientWebRtc(data.sessionId, data.recipientToken);
+      // Start WebRTC recipient receiver with recipientId and token
+      initRecipientWebRtc(data.sessionId, data.recipientToken, data.recipientId);
     } catch (err) {
       console.error('[Recipient Connect Error]', err);
       setRecipientError(err.message || 'Unable to connect to live share session.');
@@ -471,7 +504,7 @@ export default function OnlineLiveShare({
     }
   };
 
-  const initRecipientWebRtc = (sessionId, recipientToken) => {
+  const initRecipientWebRtc = (sessionId, recipientToken, recipientId) => {
     if (webRtcSessionRef.current) {
       webRtcSessionRef.current.close();
     }
@@ -480,24 +513,31 @@ export default function OnlineLiveShare({
       role: 'recipient',
       sessionId,
       token: recipientToken,
-      onStatusChange: ({ status, message }) => {
+      recipientId,
+      onStatusChange: ({ status, message, connectionType }) => {
         setRecipientStatusMessage(message);
+        if (connectionType) setRecipientConnectionType(connectionType);
         if (status === 'channel-open') {
           setRecipientStatus('transferring');
+        } else if (status === 'verifying') {
+          setRecipientStatus('verifying');
         }
       },
       onProgress: (progress) => {
         setRecipientStatus('transferring');
         setRecipientProgress(progress);
       },
-      onComplete: ({ fileName, blobUrl }) => {
+      onComplete: ({ fileName, blobUrl, sha256, sha256Verified }) => {
         setRecipientStatus('complete');
         setDownloadedBlobUrl(blobUrl);
+        if (sha256) {
+          setDownloadedSha256({ hash: sha256, verified: sha256Verified });
+        }
         setRecipientStatusMessage(`Successfully received ${fileName}!`);
       },
       onError: (errMessage) => {
         setRecipientError(errMessage);
-        if (errMessage.includes('owner has ended') || errMessage.includes('no longer available')) {
+        if (errMessage.includes('owner has ended') || errMessage.includes('no longer available') || errMessage.includes('disconnected by')) {
           setRecipientStatus('offline');
         } else {
           setRecipientStatus('error');
@@ -587,7 +627,7 @@ export default function OnlineLiveShare({
           </div>
           <div className="flex items-center gap-2">
             <Zap className="w-3.5 h-3.5 text-[#E11D2E]" />
-            <span>Direct P2P Only (No Relays)</span>
+            <span>Direct P2P + TURN Fallback</span>
           </div>
           <div className="flex items-center gap-2">
             <Clock className="w-3.5 h-3.5 text-[#E11D2E]" />
@@ -599,14 +639,14 @@ export default function OnlineLiveShare({
           </div>
         </div>
 
-        {/* Zero-Relay & Browser Memory Transparency Notice */}
+        {/* Enterprise P2P + TURN Transparency Notice */}
         <div className="mt-4 pt-3 border-t border-[#27272A]/50 text-[11px] text-zinc-400 space-y-1">
           <p className="flex items-center gap-1.5 text-zinc-300 font-semibold">
             <ShieldCheck className="w-3.5 h-3.5 text-[#E11D2E]" />
-            <span>Strict Direct P2P Guarantee</span>
+            <span>Enterprise P2P + Encrypted TURN Fallback</span>
           </p>
           <p>
-            DocQevrilo connects browsers directly via WebRTC STUN hole-punching. To prevent file contents from ever touching a third-party server, <strong>no TURN relay servers are used</strong>. If direct network traversal cannot be established due to symmetric corporate NAT, the transfer stops cleanly with an explicit error rather than routing through an intermediary.
+            DocQevrilo prioritizes direct browser-to-browser WebRTC DataChannels. If restrictive symmetric enterprise NAT or mobile firewalls prevent direct hole-punching, authenticated encrypted TURN relay provides guaranteed delivery while strictly ensuring zero file bytes are saved on cloud disks or server storage.
           </p>
         </div>
       </div>
@@ -887,56 +927,187 @@ export default function OnlineLiveShare({
                   </p>
                 </div>
 
-                {/* Real-time View & Download Counters */}
-                <div className="grid grid-cols-2 gap-2.5 pt-1">
-                  <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex items-center justify-between">
+                {/* Real-time 4-Metric Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                  <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex flex-col justify-between">
                     <div className="flex items-center gap-1.5 text-xs text-zinc-400">
                       <Eye className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                      <span>Recipients Viewed</span>
+                      <span>Total Visitors</span>
                     </div>
-                    <span className="font-mono font-bold text-white text-xs">
+                    <span className="font-mono font-bold text-white text-base mt-1">
                       {activeSession.viewCount || 0}
                     </span>
                   </div>
 
-                  <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex items-center justify-between">
+                  <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex flex-col justify-between">
                     <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                      <Download className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span>Downloads</span>
+                      <Users className="w-3.5 h-3.5 text-[#E11D2E] shrink-0" />
+                      <span>Connected Peers</span>
                     </div>
-                    <span className="font-mono font-bold text-white text-xs">
+                    <span className="font-mono font-bold text-white text-base mt-1">
+                      {connectedRecipients.filter((r) => r.status !== 'disconnected' && r.status !== 'failed').length}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex flex-col justify-between">
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                      <Activity className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Active Transfers</span>
+                    </div>
+                    <span className="font-mono font-bold text-white text-base mt-1">
+                      {connectedRecipients.filter((r) => r.status === 'transferring' || r.status === 'connected').length}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex flex-col justify-between">
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Completed</span>
+                    </div>
+                    <span className="font-mono font-bold text-white text-base mt-1">
                       {activeSession.downloadCount || 0}
-                      <span className="text-zinc-500 font-normal">
+                      <span className="text-zinc-500 font-normal text-xs">
                         {' '}/ {activeSession.maxDownloads === 'unlimited' || !activeSession.maxDownloads ? '∞' : activeSession.maxDownloads}
                       </span>
                     </span>
+                    {Number(activeSession.reservedSlots || 0) > 0 && (
+                      <span className="text-[10px] text-amber-400/90 font-mono mt-0.5">
+                        {activeSession.reservedSlots} reserved in flight
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] text-xs text-zinc-400 flex items-center gap-2">
-                  <Users className="w-4 h-4 text-[#E11D2E] shrink-0" />
-                  <span>{ownerStatusMessage || 'Waiting for recipient to connect with access code...'}</span>
+                  <Activity className="w-4 h-4 text-[#E11D2E] shrink-0" />
+                  <span>{ownerStatusMessage || 'Waiting for recipients to connect with access code...'}</span>
+                </div>
+              </div>
+
+              {/* Multi-Recipient Live Monitor */}
+              <div className="p-4 rounded-xl bg-[#18181B] border border-[#27272A] space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-[#27272A]/80">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-[#E11D2E]" />
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      Connected Recipients & Live Transfers
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">
+                    {connectedRecipients.filter((r) => r.status !== 'disconnected').length} active
+                  </span>
                 </div>
 
-                {/* Transfer Progress Bar */}
-                {ownerProgress && (
-                  <div className="space-y-1.5 pt-2">
-                    <div className="flex items-center justify-between text-xs font-medium">
-                      <span className="text-white">Streaming to recipient</span>
-                      <span className="text-[#E11D2E] font-mono">{ownerProgress.percent}%</span>
-                    </div>
+                {connectedRecipients.length === 0 ? (
+                  <div className="p-5 rounded-xl bg-[#121215] border border-dashed border-[#27272A] text-center text-xs text-zinc-500">
+                    <Radio className="w-5 h-5 mx-auto mb-1 text-zinc-600 animate-pulse" />
+                    <span>No recipients connected yet. Waiting for peers to enter access code...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {connectedRecipients.map((recipient, idx) => {
+                      const isCompleted = recipient.status === 'completed' || recipient.downloadCompleted;
+                      const isVerifying = recipient.status === 'verifying';
+                      const isTransferring = recipient.status === 'transferring';
+                      const isDisconnected = recipient.status === 'disconnected';
+                      const isFailed = recipient.status === 'failed';
+                      const connType = recipient.connectionType || 'Direct P2P';
 
-                    <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-red-600 to-[#E11D2E] transition-all duration-150"
-                        style={{ width: `${ownerProgress.percent}%` }}
-                      />
-                    </div>
+                      return (
+                        <div
+                          key={recipient.recipientId || idx}
+                          className="p-3 rounded-xl bg-[#121215] border border-[#27272A] space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                              <span className="text-xs font-mono font-bold text-white">
+                                Recipient #{idx + 1}
+                              </span>
+                              <span className="text-[10px] text-zinc-500 font-mono hidden sm:inline">
+                                ({recipient.recipientId?.slice(0, 8)})
+                              </span>
 
-                    <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono">
-                      <span>{formatFileSize(ownerProgress.bytesTransferred)} of {formatFileSize(ownerProgress.totalBytes)}</span>
-                      <span>{ownerProgress.speedFormatted}</span>
-                    </div>
+                              {/* Connection Type Diagnostic Pill */}
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono flex items-center gap-1 ${
+                                connType.includes('Relayed')
+                                  ? 'bg-purple-950/70 border border-purple-700/50 text-purple-300'
+                                  : 'bg-emerald-950/60 border border-emerald-800/40 text-emerald-400'
+                              }`}>
+                                <Zap className="w-2.5 h-2.5" />
+                                <span>{connType}</span>
+                              </span>
+
+                              {/* Status Lifecycle Badge */}
+                              {isCompleted ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 flex items-center gap-1 font-mono">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                  <span>Completed</span>
+                                </span>
+                              ) : isVerifying ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-950/80 border border-purple-700/60 text-purple-300 flex items-center gap-1 font-mono">
+                                  <RefreshCw className="w-3 h-3 text-purple-400 animate-spin" />
+                                  <span>Verifying SHA-256</span>
+                                </span>
+                              ) : isTransferring ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-700/60 text-cyan-300 flex items-center gap-1 font-mono">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                                  <span>Streaming ({recipient.percent || 0}%)</span>
+                                </span>
+                              ) : isFailed ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-950/80 border border-red-700/60 text-red-300 font-mono">
+                                  Failed
+                                </span>
+                              ) : isDisconnected ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-mono">
+                                  Disconnected
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-700/60 text-amber-300 flex items-center gap-1 font-mono">
+                                  <Activity className="w-3 h-3 text-amber-400 animate-spin" />
+                                  <span>Connecting</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Individual Disconnect Action */}
+                            {!isDisconnected && !isCompleted && (
+                              <button
+                                type="button"
+                                onClick={() => handleDisconnectRecipient(recipient.recipientId)}
+                                className="px-2.5 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 text-[11px] text-red-300 flex items-center gap-1 transition-all cursor-pointer"
+                                title="Disconnect this recipient"
+                              >
+                                <UserX className="w-3 h-3" />
+                                <span>Disconnect</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Progress Bar for Transferring / Completed */}
+                          {(isTransferring || isCompleted || (recipient.bytesTransferred > 0)) && (
+                            <div className="space-y-1">
+                              <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                                <div
+                                  className={`h-full transition-all duration-150 ${
+                                    isCompleted
+                                      ? 'bg-emerald-500'
+                                      : 'bg-gradient-to-r from-red-600 to-[#E11D2E]'
+                                  }`}
+                                  style={{ width: `${isCompleted ? 100 : recipient.percent || 0}%` }}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
+                                <span>
+                                  {formatFileSize(recipient.bytesTransferred || 0)} of{' '}
+                                  {formatFileSize(recipient.totalBytes || activeSession.fileSize)}
+                                </span>
+                                <span>{recipient.speed || (isCompleted ? 'Finished' : '')}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1035,9 +1206,11 @@ export default function OnlineLiveShare({
                     <FileText className="w-4 h-4 text-[#E11D2E]" />
                     <span>Shared File</span>
                   </span>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 flex items-center gap-1.5">
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 flex items-center gap-1.5 font-mono">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                     <span>Owner Online</span>
+                    <span className="text-zinc-500">·</span>
+                    <span className="text-cyan-400 font-bold">{recipientConnectionType}</span>
                   </span>
                 </div>
 
@@ -1052,6 +1225,17 @@ export default function OnlineLiveShare({
                   <Radio className="w-4 h-4 text-[#E11D2E] shrink-0" />
                   <span>{recipientStatusMessage || 'Negotiating connection with owner...'}</span>
                 </div>
+
+                {/* Verifying Cryptographic Integrity State */}
+                {recipientStatus === 'verifying' && (
+                  <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-800/40 text-purple-300 text-xs flex items-center gap-2.5 animate-pulse">
+                    <RefreshCw className="w-4 h-4 text-purple-400 animate-spin shrink-0" />
+                    <div>
+                      <span className="font-bold text-white block">Verifying SHA-256 Checksum</span>
+                      <span className="text-zinc-400">Computing cryptographic digest and validating byte count...</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Progress Bar */}
                 {recipientProgress && (
@@ -1078,25 +1262,46 @@ export default function OnlineLiveShare({
 
               {/* Complete State */}
               {recipientStatus === 'complete' && (
-                <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-emerald-300 text-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Check className="w-5 h-5 text-emerald-400 shrink-0" />
-                    <div>
-                      <span className="font-bold text-white block">File Transfer Complete!</span>
-                      <span className="text-zinc-400">Streamed directly via WebRTC (Zero Cloud Storage).</span>
+                <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-emerald-300 text-xs space-y-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Check className="w-5 h-5 text-emerald-400 shrink-0" />
+                      <div>
+                        <span className="font-bold text-white block">File Transfer Complete!</span>
+                        <span className="text-zinc-400">Streamed directly via WebRTC (Zero Cloud Storage).</span>
+                      </div>
                     </div>
+
+                    {downloadedBlobUrl && (
+                      <a
+                        href={downloadedBlobUrl}
+                        download={connectedFileData.fileName}
+                        className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition-all whitespace-nowrap cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Download {connectedFileData.fileName}</span>
+                      </a>
+                    )}
                   </div>
 
-                  {downloadedBlobUrl && (
-                    <a
-                      href={downloadedBlobUrl}
-                      download={connectedFileData.fileName}
-                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition-all whitespace-nowrap cursor-pointer"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Download {connectedFileData.fileName}</span>
-                    </a>
-                  )}
+                  {/* Cryptographic SHA-256 Integrity Verification Badge */}
+                  <div className="pt-2 border-t border-emerald-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-[11px] font-mono">
+                    <div className="flex items-center gap-1.5 text-emerald-300">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span className="font-bold uppercase tracking-wider">
+                        {downloadedSha256?.verified ? 'SHA-256 Verified ✓' : 'Integrity Checked'}
+                      </span>
+                    </div>
+                    {downloadedSha256?.hash && (
+                      <div
+                        className="text-zinc-400 bg-emerald-950/60 px-2.5 py-1 rounded border border-emerald-800/50 truncate max-w-full sm:max-w-md select-all"
+                        title={downloadedSha256.hash}
+                      >
+                        <span className="text-zinc-500 select-none">hash: </span>
+                        {downloadedSha256.hash}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

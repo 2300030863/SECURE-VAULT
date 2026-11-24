@@ -291,8 +291,8 @@ export default function TermsOfService() {
               <span>Multimodal AI &amp; Ephemeral Processing Guidelines</span>
             </h2>
             <p>
-              DocQevrilo provides built-in artificial intelligence features powered by Groq LPU inference (Vision OCR,
-              Whisper speech transcription, and tabular data analysis). By utilizing these features, you acknowledge:
+              DocQevrilo provides built-in artificial intelligence features powered by Google Gemini API inference (Vision OCR,
+              audio understanding, and tabular data analysis). By utilizing these features, you acknowledge:
             </p>
             <ul className="space-y-2 text-xs text-zinc-300">
               <li className="flex items-start gap-2">

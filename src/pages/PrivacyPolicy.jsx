@@ -173,7 +173,7 @@ export default function PrivacyPolicy() {
               <span>Multimodal AI Processing Security</span>
             </h2>
             <p>
-              DocQevrilo offers AI-powered document capabilities (Groq Vision OCR, Whisper audio transcription, and Excel tabular extraction) designed strictly around ephemeral processing:
+              DocQevrilo offers AI-powered document capabilities (Google Gemini Vision OCR, audio understanding, and Excel tabular extraction) designed strictly around ephemeral processing:
             </p>
             <ul className="list-disc list-inside space-y-2 pl-2 text-zinc-300">
               <li>

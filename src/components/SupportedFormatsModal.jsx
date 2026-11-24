@@ -27,7 +27,7 @@ export default function SupportedFormatsModal({ isOpen, onClose }) {
       badgeColor: 'border-emerald-800/40 text-emerald-300 bg-emerald-950/40',
       extensions: ['.xlsx', '.xls', '.csv', '.tsv'],
       aiCapability:
-        'Parsed sheet-by-sheet with automatic table digitizing. Groq AI indexes rows, financial summaries, calculations, and generates tabular Q&A.',
+        'Parsed sheet-by-sheet with automatic table digitizing. Google Gemini AI indexes rows, financial summaries, calculations, and generates tabular Q&A.',
     },
     {
       title: 'Documents & Presentations',
@@ -36,25 +36,25 @@ export default function SupportedFormatsModal({ isOpen, onClose }) {
       badgeColor: 'border-rose-800/40 text-rose-300 bg-rose-950/40',
       extensions: ['.pdf', '.docx', '.doc', '.pptx', '.txt', '.rtf'],
       aiCapability:
-        'Page-by-page and slide-by-slide text extraction. Provides executive study summaries, context citations with exact page numbers, and custom exam quizzes.',
+        'Page-by-page and slide-by-slide text extraction. Provides 11-section academic study summaries, context citations with exact page numbers, and custom exam quizzes.',
     },
     {
       title: 'Images & Visual Media',
       icon: <FileImage className="w-5 h-5 text-rose-400" />,
-      badge: 'Groq Vision OCR',
+      badge: 'Gemini Vision OCR',
       badgeColor: 'border-red-800/40 text-red-300 bg-red-950/40',
       extensions: ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.svg'],
       aiCapability:
-        'Powered by Groq Vision (llama-3.2-11b-vision-preview). Transcribes OCR text, handwriting, whiteboard notes, UI wireframes, flowcharts, and technical diagrams.',
+        'Powered by Google Gemini Vision. Transcribes OCR text, handwriting, whiteboard notes, UI wireframes, flowcharts, and technical diagrams with high fidelity.',
     },
     {
       title: 'Audio Recordings & Voice Memos',
       icon: <Music className="w-5 h-5 text-cyan-400" />,
-      badge: 'Groq Whisper Transcription',
+      badge: 'Gemini Audio Understanding',
       badgeColor: 'border-cyan-800/40 text-cyan-300 bg-cyan-950/40',
       extensions: ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.webm'],
       aiCapability:
-        'Powered by Groq Whisper (whisper-large-v3-turbo). Converts speech into high-precision transcripts with timestamped markers ([00:15]) and meeting action items.',
+        'Powered by Google Gemini Audio. Converts speech into high-precision transcripts with timestamped markers ([00:15]) and meeting action items.',
     },
     {
       title: 'Archives & Multi-File Bundles',
@@ -94,10 +94,10 @@ export default function SupportedFormatsModal({ isOpen, onClose }) {
             </div>
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                Supported File Formats & Groq AI
+                Supported File Formats & Google Gemini AI
               </h3>
               <p className="text-xs text-zinc-400">
-                Complete guide to supported formats, multimodal AI extractors, and security specifications.
+                Complete guide to supported formats, multimodal Gemini extractors, and security specifications.
               </p>
             </div>
           </div>
@@ -116,7 +116,7 @@ export default function SupportedFormatsModal({ isOpen, onClose }) {
           <div className="p-3.5 rounded-xl bg-gradient-to-r from-red-950/30 via-zinc-900 to-zinc-900 border border-[#E11D2E]/30 text-xs text-zinc-300 flex items-start gap-2.5">
             <ShieldCheck className="w-5 h-5 text-[#E11D2E] shrink-0 mt-0.5" />
             <div className="leading-relaxed">
-              <strong className="text-white">Unified Zero-Knowledge Vault:</strong> Upload single files or batch up to 20 files. DocQevrilo encrypts and auto-packages all uploads into a private vault archive. Groq AI seamlessly extracts, transcribes, and indexes all supported formats.
+              <strong className="text-white">Unified Zero-Knowledge Vault:</strong> Upload single files or batch up to 20 files. DocQevrilo encrypts and auto-packages all uploads into a private vault archive. Google Gemini AI seamlessly extracts, transcribes, and indexes all supported formats.
             </div>
           </div>
 
@@ -180,7 +180,7 @@ export default function SupportedFormatsModal({ isOpen, onClose }) {
         <div className="px-5 py-3 bg-[#18181B] border-t border-[#27272A] flex items-center justify-between shrink-0">
           <span className="text-[11px] text-zinc-400 flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>All supported formats automatically integrate with Groq AI</span>
+            <span>All supported formats automatically integrate with Google Gemini AI</span>
           </span>
           <button
             type="button"
