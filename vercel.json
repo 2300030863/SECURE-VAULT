@@ -92,7 +92,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https://secure-vault-backend-1.onrender.com https://*.onrender.com https://*.backblazeb2.com https://fonts.googleapis.com https://fonts.gstatic.com; frame-src 'self' https://secure-vault-backend-1.onrender.com https://*.onrender.com blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https://secure-vault-backend-1.onrender.com wss://secure-vault-backend-1.onrender.com https://*.onrender.com wss://*.onrender.com https://*.backblazeb2.com https://fonts.googleapis.com https://fonts.gstatic.com; frame-src 'self' https://secure-vault-backend-1.onrender.com https://*.onrender.com blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
         }
       ]
     }
