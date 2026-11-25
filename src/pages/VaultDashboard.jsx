@@ -63,6 +63,7 @@ import MySharedDocuments from '../components/sharing/MySharedDocuments';
 import AiDocumentModal from '../components/ai/AiDocumentModal';
 import SupportedFormatsModal from '../components/SupportedFormatsModal';
 import OnlineLiveShare from '../components/sharing/OnlineLiveShare';
+import UnlockQrScannerModal from '../components/sharing/UnlockQrScannerModal';
 import { WebRtcShareSession, formatFileSize } from '../services/webRtcShareService';
 import { P2PSenderSession, P2PReceiverSession } from '../services/p2pSocketWebRtcService';
 import JSZip from 'jszip';
@@ -189,6 +190,9 @@ export default function VaultDashboard({ currentUser }) {
 
   // Access State
   const [accessCodeInput, setAccessCodeInput] = useState('');
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const accessCodeInputRef = useRef(null);
+  const p2pSecretInputRef = useRef(null);
   const [isSecureP2PUnlock, setIsSecureP2PUnlock] = useState(false);
   const [p2pUnlockSecret, setP2pUnlockSecret] = useState('');
   const [showP2PUnlockSecret, setShowP2PUnlockSecret] = useState(false);
@@ -671,6 +675,68 @@ export default function VaultDashboard({ currentUser }) {
   };
 
   // Access Document handler
+  const unlockVaultAccessCode = async (trimmedCode) => {
+    setIsVerifying(true);
+    setAccessError('');
+    setUnlockedDoc(null);
+    setUnlockedLiveShareCode(null);
+    handleResetP2PReceiver();
+    setShowInlinePreview(false);
+
+    try {
+      const res = await fetch(apiUrl('/documents/access'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_code: trimmedCode }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Invalid access code or access expired.');
+      }
+
+      // If the code belongs to a Live Online Share session
+      if (data.isOnlineLiveShare) {
+        setUnlockedLiveShareCode(data.access_code || trimmedCode.toUpperCase());
+        setUnlockedDoc(null);
+        return;
+      }
+
+      setUnlockedDoc({
+        ...data.document,
+        enteredCode: trimmedCode,
+      });
+    } catch (err) {
+      setAccessError(err.message || 'Access error occurred.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleQrScanSuccess = async (parsed) => {
+    setShowQrScanner(false);
+    if (!parsed?.ok || !parsed.code) return;
+
+    setAccessCodeInput(parsed.code);
+    setAccessError('');
+    setUnlockedDoc(null);
+    setUnlockedLiveShareCode(null);
+
+    if (parsed.isP2P) {
+      setIsSecureP2PUnlock(true);
+      if (parsed.unlockSecret) {
+        setP2pUnlockSecret(parsed.unlockSecret);
+      } else {
+        setTimeout(() => p2pSecretInputRef.current?.focus(), 60);
+      }
+      return;
+    }
+
+    setIsSecureP2PUnlock(false);
+    await unlockVaultAccessCode(parsed.code);
+  };
+
   const handleAccessSubmit = async (e) => {
     e.preventDefault();
     const trimmedCode = accessCodeInput.trim();
@@ -721,42 +787,7 @@ export default function VaultDashboard({ currentUser }) {
       return;
     }
 
-    setIsVerifying(true);
-    setAccessError('');
-    setUnlockedDoc(null);
-    setUnlockedLiveShareCode(null);
-    handleResetP2PReceiver();
-    setShowInlinePreview(false);
-
-    try {
-      const res = await fetch(apiUrl('/documents/access'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_code: trimmedCode }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Invalid access code or access expired.');
-      }
-
-      // If the code belongs to a Live Online Share session
-      if (data.isOnlineLiveShare) {
-        setUnlockedLiveShareCode(data.access_code || trimmedCode.toUpperCase());
-        setUnlockedDoc(null);
-        return;
-      }
-
-      setUnlockedDoc({
-        ...data.document,
-        enteredCode: trimmedCode,
-      });
-    } catch (err) {
-      setAccessError(err.message || 'Access error occurred.');
-    } finally {
-      setIsVerifying(false);
-    }
+    await unlockVaultAccessCode(trimmedCode);
   };
 
   const handleDownloadUnlockedDoc = () => {
@@ -1962,6 +1993,7 @@ export default function VaultDashboard({ currentUser }) {
                 </label>
                 <div className="relative">
                   <input
+                    ref={accessCodeInputRef}
                     type="text"
                     value={accessCodeInput}
                     onChange={(e) => {
@@ -1978,25 +2010,35 @@ export default function VaultDashboard({ currentUser }) {
                         ? 'Enter Transfer ID... (e.g. DQV-A7X9-4421)'
                         : 'Enter vault code, 6-char live code, or DQV-... Transfer ID'
                     }
-                    className="w-full rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none transition-all pr-20"
+                    className="w-full rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none transition-all pr-40"
                   />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const text = await navigator.clipboard.readText();
-                        if (text) {
-                          const trimmed = text.trim();
-                          setAccessCodeInput(trimmed);
-                          if (/^DQV-/i.test(trimmed)) setIsSecureP2PUnlock(true);
-                          if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
-                        }
-                      } catch {}
-                    }}
-                    className="absolute right-2 top-2 px-2.5 py-1 text-xs font-mono text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 rounded-lg transition-all cursor-pointer"
-                  >
-                    Paste
-                  </button>
+                  <div className="absolute right-2 top-2 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowQrScanner(true)}
+                      className="px-2.5 py-1 text-xs font-semibold text-red-200 hover:text-white bg-red-950/60 hover:bg-[#E11D2E] border border-[#E11D2E]/50 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>Scan QR Code</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          if (text) {
+                            const trimmed = text.trim();
+                            setAccessCodeInput(trimmed);
+                            if (/^DQV-/i.test(trimmed)) setIsSecureP2PUnlock(true);
+                            if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
+                          }
+                        } catch {}
+                      }}
+                      className="px-2.5 py-1 text-xs font-mono text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 rounded-lg transition-all cursor-pointer"
+                    >
+                      Paste
+                    </button>
+                  </div>
                 </div>
                 <p className="text-[11px] text-zinc-500 mt-1.5">
                   {isP2PTransferCode
@@ -2012,6 +2054,7 @@ export default function VaultDashboard({ currentUser }) {
                   </label>
                   <div className="relative">
                     <input
+                      ref={p2pSecretInputRef}
                       type={showP2PUnlockSecret ? 'text' : 'password'}
                       value={p2pUnlockSecret}
                       onChange={(e) => {
@@ -2087,6 +2130,16 @@ export default function VaultDashboard({ currentUser }) {
                 )}
               </button>
             </form>
+
+            <UnlockQrScannerModal
+              isOpen={showQrScanner}
+              onClose={() => setShowQrScanner(false)}
+              onScanSuccess={handleQrScanSuccess}
+              onFallbackManual={() => {
+                setShowQrScanner(false);
+                setTimeout(() => accessCodeInputRef.current?.focus(), 50);
+              }}
+            />
 
             {/* Inline Secure P2P Receiver Status & Downloads */}
             {p2pReceiverState && (
