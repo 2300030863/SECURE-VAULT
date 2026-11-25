@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, Shield, ArrowRight, FolderLock, User, Radio } from 'lucide-react';
+import { Menu, X, Shield, ArrowRight, FolderLock, User } from 'lucide-react';
 import Logo from './Logo';
 import UserProfileModal from './UserProfileModal';
 
@@ -36,15 +36,6 @@ export default function Navbar({ isAuthenticated = false, currentUser = null, on
             >
               <FolderLock size={15} />
               <span>Document Vault</span>
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to="/p2p-share"
-              className={({ isActive }) => `sv-nav-link ${isActive ? 'active' : ''}`}
-            >
-              <Radio size={15} />
-              <span>Secure P2P</span>
             </NavLink>
           </li>
 
@@ -180,14 +171,6 @@ export default function Navbar({ isAuthenticated = false, currentUser = null, on
         >
           <FolderLock size={16} />
           <span>Document Vault</span>
-        </NavLink>
-        <NavLink
-          to="/p2p-share"
-          className={({ isActive }) => `sv-nav-link ${isActive ? 'active' : ''}`}
-          onClick={handleLinkClick}
-        >
-          <Radio size={16} />
-          <span>Secure P2P Sharing</span>
         </NavLink>
 
         {isAuthenticated && currentUser?.role === 'admin' && (

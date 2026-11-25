@@ -31,6 +31,7 @@ import {
   Radio,
   Trash2,
   Eye,
+  EyeOff,
   Archive,
   Plus,
   Globe,
@@ -47,7 +48,14 @@ import {
   FolderLock,
   Layers,
   Send,
+  StopCircle,
+  Play,
+  Pause,
+  QrCode,
+  XCircle,
+  Users,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import StorageModeSelector from '../components/sharing/StorageModeSelector';
 import TemporaryStorageSettings from '../components/sharing/TemporaryStorageSettings';
 import OnlineSharingSettings from '../components/sharing/OnlineSharingSettings';
@@ -56,7 +64,25 @@ import AiDocumentModal from '../components/ai/AiDocumentModal';
 import SupportedFormatsModal from '../components/SupportedFormatsModal';
 import OnlineLiveShare from '../components/sharing/OnlineLiveShare';
 import { WebRtcShareSession, formatFileSize } from '../services/webRtcShareService';
+import { P2PSenderSession, P2PReceiverSession } from '../services/p2pSocketWebRtcService';
 import JSZip from 'jszip';
+
+function formatP2PCountdown(totalSeconds = 0) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  if (hrs > 0) {
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+function formatP2PSpeed(bps = 0) {
+  if (!bps || bps <= 0) return '0 KB/s';
+  if (bps >= 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(2)} MB/s`;
+  return `${(bps / 1024).toFixed(1)} KB/s`;
+}
 
 export default function VaultDashboard({ currentUser }) {
   const navigate = useNavigate();
@@ -89,7 +115,7 @@ export default function VaultDashboard({ currentUser }) {
 
   // Upload & Storage Mode State
   const [entryMode, setEntryMode] = useState('file'); // 'file' | 'text'
-  const [storageMode, setStorageMode] = useState('online'); // 'online' | 'temporary' | 'long_term'
+  const [storageMode, setStorageMode] = useState(''); // '' (unselected) | 'online' | 'temporary' | 'long_term'
   const [maxDownloads, setMaxDownloads] = useState(5); // 1 | 5 | 10 | 'unlimited'
   const [deleteAfterDownload, setDeleteAfterDownload] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -112,174 +138,104 @@ export default function VaultDashboard({ currentUser }) {
   const [textCopySuccess, setTextCopySuccess] = useState(false);
   const [showInlinePreview, setShowInlinePreview] = useState(false);
   const [aiModalDoc, setAiModalDoc] = useState(null);
-  const [showSettingsAccordion, setShowSettingsAccordion] = useState(false);
+  const [showSettingsAccordion, setShowSettingsAccordion] = useState(true);
   const fileInputRef = useRef(null);
 
-  // Live Online Sharing Session State
-  const [activeLiveSession, setActiveLiveSession] = useState(null); // { sessionId, accessCode, ownerToken, fileName, fileSize, expiresAt }
+  // Secure P2P Live Sharing Session State (replaces legacy Online Sharing under Storage Policy & Access Rules)
+  const [activeLiveSession, setActiveLiveSession] = useState(null); // { transferId, unlockSecret, expiresAt, status, ... }
   const [isStartingLiveShare, setIsStartingLiveShare] = useState(false);
-  const [liveShareStatus, setLiveShareStatus] = useState('idle'); // 'idle' | 'ready' | 'connecting' | 'transferring' | 'complete' | 'error'
   const [liveShareStatusMessage, setLiveShareStatusMessage] = useState('');
-  const [liveShareProgress, setLiveShareProgress] = useState(null); // { percent, speedFormatted, bytesTransferred, totalBytes }
+  const [liveShareProgress, setLiveShareProgress] = useState(null);
   const [copiedLiveCode, setCopiedLiveCode] = useState(false);
-  const [copiedLiveLink, setCopiedLiveLink] = useState(false);
-  const liveHeartbeatRef = useRef(null);
-  const liveWebRtcRef = useRef(null);
+  const [copiedLiveSecret, setCopiedLiveSecret] = useState(false);
+  const [showP2PSecret, setShowP2PSecret] = useState(false);
+  const [confirmStopP2P, setConfirmStopP2P] = useState(false);
+  const secureP2PRef = useRef(null);
 
-  // Clean up WebRTC and Heartbeat on unmount
+  // Clean up Secure P2P session on unmount
   useEffect(() => {
     return () => {
-      if (liveHeartbeatRef.current) clearInterval(liveHeartbeatRef.current);
-      if (liveWebRtcRef.current) liveWebRtcRef.current.close();
+      secureP2PRef.current?.stopSharing();
     };
   }, []);
 
-  // Browser Unload / Page Hide Beacon to instantly end online share session
+  // Live 1-second countdown from session creation
   useEffect(() => {
-    const handleUnloadOrHide = () => {
-      if (activeLiveSession?.sessionId && activeLiveSession?.ownerToken) {
-        const payload = JSON.stringify({
-          sessionId: activeLiveSession.sessionId,
-          ownerToken: activeLiveSession.ownerToken,
-        });
-        try {
-          const blob = new Blob([payload], { type: 'application/json' });
-          navigator.sendBeacon(apiUrl('/online-share/end'), blob);
-        } catch (_) {}
-        try {
-          fetch(apiUrl('/online-share/end'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: payload,
-            keepalive: true,
-          }).catch(() => {});
-        } catch (_) {}
-      }
-    };
-
-    window.addEventListener('beforeunload', handleUnloadOrHide);
-    window.addEventListener('pagehide', handleUnloadOrHide);
-    return () => {
-      window.removeEventListener('beforeunload', handleUnloadOrHide);
-      window.removeEventListener('pagehide', handleUnloadOrHide);
-    };
-  }, [activeLiveSession]);
-
-  const initOwnerLiveShare = (sessionData) => {
-    setActiveLiveSession(sessionData);
-    setLiveShareStatus('ready');
-    setLiveShareStatusMessage('Waiting for recipient to connect with access code...');
-
-    if (liveHeartbeatRef.current) clearInterval(liveHeartbeatRef.current);
-    liveHeartbeatRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(apiUrl('/online-share/heartbeat'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: sessionData.sessionId,
-            ownerToken: sessionData.ownerToken,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.viewCount != null || data.downloadCount != null) {
-            setActiveLiveSession((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    viewCount: data.viewCount != null ? data.viewCount : prev.viewCount,
-                    downloadCount: data.downloadCount != null ? data.downloadCount : prev.downloadCount,
-                    maxDownloads: data.maxDownloads != null ? data.maxDownloads : prev.maxDownloads,
-                  }
-                : prev
-            );
-          }
-        }
-      } catch (_) {}
-    }, 8000);
-
-    if (liveWebRtcRef.current) liveWebRtcRef.current.close();
-    const rtcSession = new WebRtcShareSession({
-      role: 'owner',
-      sessionId: sessionData.sessionId,
-      token: sessionData.ownerToken,
-      file: sessionData.file,
-      onStatusChange: ({ status, message }) => {
-        setLiveShareStatusMessage(message);
-        if (status === 'recipient-connected') setLiveShareStatus('connecting');
-        else if (status === 'channel-open') setLiveShareStatus('transferring');
-      },
-      onProgress: (progress) => {
-        setLiveShareStatus('transferring');
-        setLiveShareProgress(progress);
-      },
-      onStatsUpdate: (stats) => {
-        setActiveLiveSession((prev) =>
-          prev
-            ? {
-                ...prev,
-                viewCount: stats.viewCount != null ? stats.viewCount : prev.viewCount,
-                downloadCount: stats.downloadCount != null ? stats.downloadCount : prev.downloadCount,
-                maxDownloads: stats.maxDownloads != null ? stats.maxDownloads : prev.maxDownloads,
-              }
-            : prev
-        );
-      },
-      onComplete: () => {
-        setLiveShareStatus('complete');
-        setLiveShareStatusMessage(
-          deleteAfterDownload
-            ? 'Transfer complete! Auto-ending session in 4 seconds (Burn on Finish)...'
-            : 'File transfer completed successfully!'
-        );
-        if (deleteAfterDownload) {
-          setTimeout(() => handleEndLiveShare(), 4000);
-        }
-      },
-      onError: (errMessage) => {
-        setUploadError(errMessage);
-        setLiveShareStatus('error');
-      },
-    });
-
-    liveWebRtcRef.current = rtcSession;
-    rtcSession.start();
-  };
-
-  const handleEndLiveShare = async () => {
-    if (liveHeartbeatRef.current) {
-      clearInterval(liveHeartbeatRef.current);
-      liveHeartbeatRef.current = null;
+    if (!activeLiveSession?.expiresAt || ['EXPIRED', 'CANCELLED'].includes(activeLiveSession.status)) {
+      return;
     }
-    if (liveWebRtcRef.current) {
-      liveWebRtcRef.current.close();
-      liveWebRtcRef.current = null;
-    }
-    if (activeLiveSession?.sessionId && activeLiveSession?.ownerToken) {
-      try {
-        await fetch(apiUrl('/online-share/end'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: activeLiveSession.sessionId,
-            ownerToken: activeLiveSession.ownerToken,
-          }),
-        });
-      } catch (_) {}
-    }
+    const timer = setInterval(() => {
+      setActiveLiveSession((prev) => {
+        if (!prev?.expiresAt || ['EXPIRED', 'CANCELLED'].includes(prev.status)) return prev;
+        const rem = Math.max(0, Math.ceil((prev.expiresAt - Date.now()) / 1000));
+        return {
+          ...prev,
+          remainingSeconds: rem,
+          status: rem === 0 ? 'EXPIRED' : prev.status,
+        };
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [activeLiveSession?.transferId, activeLiveSession?.expiresAt, activeLiveSession?.status]);
+
+  const handleEndLiveShare = () => {
+    setConfirmStopP2P(false);
+    secureP2PRef.current?.stopSharing();
+    secureP2PRef.current = null;
     setActiveLiveSession(null);
-    setLiveShareStatus('idle');
     setLiveShareProgress(null);
     setLiveShareStatusMessage('');
   };
 
   // Access State
   const [accessCodeInput, setAccessCodeInput] = useState('');
+  const [isSecureP2PUnlock, setIsSecureP2PUnlock] = useState(false);
+  const [p2pUnlockSecret, setP2pUnlockSecret] = useState('');
+  const [showP2PUnlockSecret, setShowP2PUnlockSecret] = useState(false);
+  const [p2pReceiverState, setP2pReceiverState] = useState(null);
+  const [p2pReceiverProgress, setP2pReceiverProgress] = useState(null);
+  const p2pReceiverRef = useRef(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [unlockedDoc, setUnlockedDoc] = useState(null);
   const [unlockedLiveShareCode, setUnlockedLiveShareCode] = useState(null);
   const [accessError, setAccessError] = useState('');
+
+  const isP2PTransferCode = isSecureP2PUnlock || /^DQV-/i.test(accessCodeInput.trim());
+
+  const handleResetP2PReceiver = () => {
+    p2pReceiverRef.current?.disconnect();
+    p2pReceiverRef.current = null;
+    setP2pReceiverState(null);
+    setP2pReceiverProgress(null);
+    setAccessError('');
+  };
+
+  useEffect(() => {
+    return () => {
+      p2pReceiverRef.current?.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      !p2pReceiverState?.expiresAt ||
+      ['COMPLETED', 'EXPIRED', 'CANCELLED', 'FAILED'].includes(p2pReceiverState.status)
+    ) {
+      return;
+    }
+    const timer = setInterval(() => {
+      setP2pReceiverState((prev) => {
+        if (!prev?.expiresAt) return prev;
+        const rem = Math.max(0, Math.ceil((prev.expiresAt - Date.now()) / 1000));
+        return {
+          ...prev,
+          remainingSeconds: rem,
+          status: rem === 0 ? 'EXPIRED' : prev.status,
+        };
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [p2pReceiverState?.transferId, p2pReceiverState?.expiresAt, p2pReceiverState?.status]);
 
   // Auto-fill code from URL query param if present (?code=ABC or ?tab=online-share)
   useEffect(() => {
@@ -289,9 +245,13 @@ export default function VaultDashboard({ currentUser }) {
       setEntryMode('file');
       setStorageMode('online');
     }
-    const codeFromUrl = searchParams.get('code') || searchParams.get('c');
+    const codeFromUrl = searchParams.get('code') || searchParams.get('c') || searchParams.get('transferId');
     if (codeFromUrl && codeFromUrl.trim()) {
-      setAccessCodeInput(codeFromUrl.trim());
+      const trimmed = codeFromUrl.trim();
+      setAccessCodeInput(trimmed);
+      if (/^DQV-/i.test(trimmed)) {
+        setIsSecureP2PUnlock(true);
+      }
       setActiveTab('access');
     }
   }, [searchParams]);
@@ -511,86 +471,73 @@ export default function VaultDashboard({ currentUser }) {
       setUploadError('Please enter text content to secure.');
       return;
     }
+    if (!storageMode) {
+      setShowSettingsAccordion(true);
+      setUploadError('Please select a Storage Policy & Access Rules option before continuing.');
+      return;
+    }
 
-    // ONLINE SHARING (Live WebRTC P2P Workflow):
+    // SECURE P2P ONLINE SHARING (E2EE AES-256-GCM + Argon2id + Socket.IO + WebRTC):
     if (storageMode === 'online' && entryMode === 'file') {
       setIsStartingLiveShare(true);
       setUploadError('');
+      setLiveShareProgress(null);
 
-      let fileToShare = selectedFiles[0];
-      let shareFileName = documentName.trim() || selectedFiles[0].name;
+      let durationSeconds = 900; // 15 minutes default
+      if (expiryOption === '5m') durationSeconds = 300;
+      else if (expiryOption === '10m') durationSeconds = 600;
+      else if (expiryOption === '15m') durationSeconds = 900;
+      else if (expiryOption === '30m') durationSeconds = 1800;
+      else if (expiryOption === '1h') durationSeconds = 3600;
 
-      // MULTIPLE FILES SUPPORT: Package all files into a single ZIP archive in browser memory
-      if (selectedFiles.length > 1) {
-        try {
-          const zip = new JSZip();
-          for (const file of selectedFiles) {
-            zip.file(file.name, file);
-          }
-          const zipBlob = await zip.generateAsync({
-            type: 'blob',
-            compression: 'DEFLATE',
-            compressionOptions: { level: 6 },
-          });
-          const customName = documentName.trim();
-          const zipName = customName
-            ? (customName.endsWith('.zip') ? customName : `${customName}.zip`)
-            : `DocQevrilo_Archive_${selectedFiles.length}_Files.zip`;
-
-          fileToShare = new File([zipBlob], zipName, { type: 'application/zip' });
-          shareFileName = zipName;
-        } catch (zipErr) {
-          console.error('[Browser ZIP Packaging Error]', zipErr);
-          setUploadError('Failed to package files into ZIP archive.');
-          setIsStartingLiveShare(false);
-          return;
-        }
-      }
-
-      let durationMinutes = 120;
-      if (expiryOption === '30m') durationMinutes = 30;
-      else if (expiryOption === '1h') durationMinutes = 60;
-      else if (expiryOption === '2h') durationMinutes = 120;
-      else if (expiryOption === '4h') durationMinutes = 240;
-
-      const maxDl = maxDownloads === 'unlimited' ? 'unlimited' : Number(maxDownloads) || 5;
+      const parsedMaxRecipients =
+        maxDownloads === 'unlimited' || maxDownloads === null
+          ? null
+          : [1, 2, 5, 10].includes(Number(maxDownloads))
+          ? Number(maxDownloads)
+          : 1;
+      const totalSize = selectedFiles.reduce((acc, f) => acc + f.size, 0);
+      const displayName =
+        selectedFiles.length > 1
+          ? `${selectedFiles.length} files (${selectedFiles[0].name}...)`
+          : selectedFiles[0].name;
 
       try {
-        const res = await fetch(apiUrl('/online-share/create'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authService.getAuthHeaders(),
+        secureP2PRef.current?.stopSharing();
+        const session = new P2PSenderSession({
+          onStateChange: (patch) => {
+            setActiveLiveSession((prev) => ({
+              ...(prev || {
+                fileName: displayName,
+                fileSize: totalSize,
+                fileCount: selectedFiles.length,
+                recipients: [],
+                recipientCount: 0,
+              }),
+              ...patch,
+            }));
           },
-          body: JSON.stringify({
-            fileName: shareFileName,
-            fileSize: fileToShare.size,
-            mimeType: fileToShare.type || 'application/octet-stream',
-            durationMinutes,
-            maxDownloads: maxDl,
-            deleteAfterDownload: Boolean(deleteAfterDownload),
-          }),
+          onProgress: (prog) => {
+            setLiveShareProgress(prog);
+          },
+          onNotification: (note) => {
+            if (note?.message) setLiveShareStatusMessage(note.message);
+          },
+          onError: (errMsg) => {
+            setUploadError(errMsg);
+          },
         });
-
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || 'Failed to create online sharing session.');
-        }
-
-        initOwnerLiveShare({
-          sessionId: data.sessionId,
-          accessCode: data.accessCode,
-          ownerToken: data.ownerToken,
-          file: fileToShare,
-          fileName: shareFileName,
-          fileSize: fileToShare.size,
-          viewCount: data.viewCount || 0,
-          downloadCount: data.downloadCount || 0,
-          maxDownloads: data.maxDownloads || maxDl,
-          expiresAt: data.expiresAt,
+        secureP2PRef.current = session;
+        await session.startSession({
+          files: selectedFiles,
+          durationSeconds,
+          maxRecipients: parsedMaxRecipients,
+          oneTimeAccess: Boolean(deleteAfterDownload),
         });
+        setLiveShareStatusMessage('Secure P2P session active. Share Transfer ID and Secret Unlock Code separately.');
       } catch (err) {
-        setUploadError(err.message || 'Could not start online sharing session.');
+        setActiveLiveSession(null);
+        setUploadError(err.message || 'Could not start Secure P2P sharing session.');
       } finally {
         setIsStartingLiveShare(false);
       }
@@ -726,8 +673,51 @@ export default function VaultDashboard({ currentUser }) {
   // Access Document handler
   const handleAccessSubmit = async (e) => {
     e.preventDefault();
-    if (!accessCodeInput.trim()) {
-      setAccessError('Please enter an access code.');
+    const trimmedCode = accessCodeInput.trim();
+    if (!trimmedCode) {
+      setAccessError(isP2PTransferCode ? 'Please enter a Secure P2P Transfer ID.' : 'Please enter an access code.');
+      return;
+    }
+
+    if (isSecureP2PUnlock || /^DQV-/i.test(trimmedCode)) {
+      if (!p2pUnlockSecret.trim()) {
+        setAccessError('Please enter the Secret Unlock Code to decrypt this Secure P2P transfer.');
+        return;
+      }
+
+      setAccessError('');
+      setUnlockedDoc(null);
+      setUnlockedLiveShareCode(null);
+      setShowInlinePreview(false);
+      p2pReceiverRef.current?.disconnect();
+      setP2pReceiverProgress(null);
+
+      const receiver = new P2PReceiverSession({
+        onStateChange: (patch) => {
+          setP2pReceiverState((prev) => ({ ...(prev || {}), ...patch }));
+        },
+        onProgress: (prog) => {
+          setP2pReceiverProgress(prog);
+        },
+        onNotification: (msg) => {
+          if (msg) setAccessError('');
+        },
+        onError: (errMsg) => {
+          setAccessError(errMsg || 'Secure P2P transfer failed.');
+        },
+      });
+      p2pReceiverRef.current = receiver;
+      setIsVerifying(true);
+      try {
+        await receiver.joinSession({
+          transferId: trimmedCode.toUpperCase(),
+          unlockSecret: p2pUnlockSecret.trim(),
+        });
+      } catch (err) {
+        setAccessError(err.message || 'Failed to connect to Secure P2P session.');
+      } finally {
+        setIsVerifying(false);
+      }
       return;
     }
 
@@ -735,13 +725,14 @@ export default function VaultDashboard({ currentUser }) {
     setAccessError('');
     setUnlockedDoc(null);
     setUnlockedLiveShareCode(null);
+    handleResetP2PReceiver();
     setShowInlinePreview(false);
 
     try {
       const res = await fetch(apiUrl('/documents/access'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_code: accessCodeInput.trim() }),
+        body: JSON.stringify({ access_code: trimmedCode }),
       });
 
       const data = await res.json();
@@ -752,14 +743,14 @@ export default function VaultDashboard({ currentUser }) {
 
       // If the code belongs to a Live Online Share session
       if (data.isOnlineLiveShare) {
-        setUnlockedLiveShareCode(data.access_code || accessCodeInput.trim().toUpperCase());
+        setUnlockedLiveShareCode(data.access_code || trimmedCode.toUpperCase());
         setUnlockedDoc(null);
         return;
       }
 
       setUnlockedDoc({
         ...data.document,
-        enteredCode: accessCodeInput.trim(),
+        enteredCode: trimmedCode,
       });
     } catch (err) {
       setAccessError(err.message || 'Access error occurred.');
@@ -1098,146 +1089,250 @@ export default function VaultDashboard({ currentUser }) {
               </button>
             </div>
 
-            {/* If an Online Live Sharing Session is currently active, render the Live P2P Dashboard */}
+            {/* If a Secure P2P Session is currently active, render the Secure P2P Sender Dashboard */}
             {activeLiveSession ? (
-              <div className="p-6 rounded-2xl bg-[#0E0E10] border border-[#27272A] space-y-6 animate-in fade-in duration-200">
-                {/* Access Code Box */}
-                <div className="text-center space-y-3 pb-5 border-b border-[#27272A]">
-                  <span className="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold flex items-center justify-center gap-1.5">
-                    <Radio className="w-3.5 h-3.5 text-[#E11D2E] animate-pulse" />
-                    <span>Live Online Sharing Active · Share Access Code with Recipient</span>
-                  </span>
-
-                  <div className="text-3xl sm:text-4xl font-mono font-black text-white tracking-[0.25em] py-3 px-6 rounded-xl bg-[#18181B] border border-red-900/50 text-[#E11D2E] max-w-sm mx-auto shadow-inner shadow-red-950/40">
-                    {activeLiveSession.accessCode}
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(activeLiveSession.accessCode);
-                        setCopiedLiveCode(true);
-                        setTimeout(() => setCopiedLiveCode(false), 2000);
-                      }}
-                      className="px-4 py-2 rounded-lg bg-[#18181B] border border-[#27272A] hover:border-zinc-500 text-xs font-semibold text-white flex items-center gap-2 transition-all cursor-pointer"
-                    >
-                      {copiedLiveCode ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedLiveCode ? 'Copied Code!' : 'Copy Code'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const shareUrl = `${window.location.origin}/vault?code=${activeLiveSession.accessCode}`;
-                        navigator.clipboard.writeText(shareUrl);
-                        setCopiedLiveLink(true);
-                        setTimeout(() => setCopiedLiveLink(false), 2000);
-                      }}
-                      className="px-4 py-2 rounded-lg bg-[#18181B] border border-[#27272A] hover:border-zinc-500 text-xs font-semibold text-white flex items-center gap-2 transition-all cursor-pointer"
-                    >
-                      {copiedLiveLink ? <Check className="w-3.5 h-3.5 text-green-400" /> : <ExternalLink className="w-3.5 h-3.5" />}
-                      <span>{copiedLiveLink ? 'Copied Link!' : 'Copy Direct Link'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Live Status and Transfer Info */}
-                <div className="p-4 rounded-xl bg-[#18181B] border border-[#27272A] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-2.5 w-2.5 relative">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                      </span>
-                      <span className="text-xs font-bold text-white uppercase tracking-wider">
-                        Online Sharing State
-                      </span>
-                    </div>
-
-                    <span className="text-[11px] text-zinc-400">
-                      Heartbeat: <span className="text-emerald-400 font-mono">10s Active</span>
+              <div className="p-5 sm:p-6 rounded-2xl bg-[#0E0E10] border border-[#27272A] space-y-5 animate-in fade-in duration-200">
+                {/* Top Status & Authoritative Countdown */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-zinc-800">
+                  <div className="flex items-center gap-2.5">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#E11D2E]/20 border border-[#E11D2E]/40 text-[#FF4D5E]">
+                      {(activeLiveSession.status || 'WAITING_FOR_RECIPIENT').replace(/_/g, ' ')}
+                    </span>
+                    <span className="text-xs text-zinc-400">
+                      Recipients: <strong className="text-white">{activeLiveSession.recipientCount || 0} / {activeLiveSession.maxRecipients == null ? '∞' : activeLiveSession.maxRecipients}</strong>
                     </span>
                   </div>
 
-                  <div className="text-xs text-zinc-300">
-                    <p className="font-semibold text-white truncate">{activeLiveSession.fileName}</p>
-                    <p className="text-zinc-500 mt-0.5">
-                      Size: {formatFileSize(activeLiveSession.fileSize)} · Direct WebRTC memory stream
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#121215] border border-zinc-800 text-xs font-mono">
+                      <Clock className="w-3.5 h-3.5 text-[#E11D2E]" />
+                      <span className={(activeLiveSession.remainingSeconds || 0) <= 60 ? 'text-red-400 font-bold' : 'text-white'}>
+                        {formatP2PCountdown(activeLiveSession.remainingSeconds || 0)}
+                      </span>
+                    </div>
+
+                    {!['EXPIRED', 'CANCELLED'].includes(activeLiveSession.status) ? (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmStopP2P(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold cursor-pointer"
+                      >
+                        <StopCircle className="w-3.5 h-3.5" />
+                        <span>Stop Sharing</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleEndLiveShare}
+                        className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold cursor-pointer"
+                      >
+                        New Share
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Confirmation Banner */}
+                {confirmStopP2P && (
+                  <div className="p-4 rounded-xl bg-red-950/70 border border-red-700 space-y-2.5">
+                    <div className="text-xs font-bold text-white">Stop sharing immediately?</div>
+                    <p className="text-[11px] text-red-200">
+                      This will immediately terminate active transfers, close all WebRTC DataChannels, and cancel this Transfer ID. Stopping sharing cannot remotely delete files a recipient has already downloaded.
                     </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleEndLiveShare}
+                        className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold cursor-pointer"
+                      >
+                        Yes, Stop Sharing Now
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmStopP2P(false)}
+                        className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-200 text-xs cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
+                )}
 
-                  {/* Real-time View & Download Counters */}
-                  <div className="grid grid-cols-2 gap-2.5 pt-1">
-                    <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                        <Eye className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                        <span>Recipients Viewed</span>
+                {/* Transfer ID, Secret Unlock Code & QR Code */}
+                {!['EXPIRED', 'CANCELLED'].includes(activeLiveSession.status) && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2 space-y-3">
+                      <div className="p-3.5 rounded-xl bg-[#121215] border border-zinc-800">
+                        <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">
+                          Transfer ID (Public Room Identifier)
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <code className="text-sm sm:text-base font-bold text-white font-mono break-all">
+                            {activeLiveSession.transferId}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(activeLiveSession.transferId);
+                              setCopiedLiveCode(true);
+                              setTimeout(() => setCopiedLiveCode(false), 2000);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 flex items-center gap-1 shrink-0 cursor-pointer"
+                          >
+                            {copiedLiveCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedLiveCode ? 'Copied' : 'Copy'}</span>
+                          </button>
+                        </div>
                       </div>
-                      <span className="font-mono font-bold text-white text-xs">
-                        {activeLiveSession.viewCount || 0}
-                      </span>
+
+                      <div className="p-3.5 rounded-xl bg-[#121215] border border-zinc-800">
+                        <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">
+                          Secret Unlock Code (E2EE Key — Never Sent to Server)
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <code className="text-xs sm:text-sm font-bold text-amber-300 font-mono break-all">
+                            {showP2PSecret ? activeLiveSession.unlockSecret : '•••••-•••••-•••••-•••••-•••••-•••••'}
+                          </code>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setShowP2PSecret(!showP2PSecret)}
+                              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer"
+                              title={showP2PSecret ? 'Hide code' : 'Reveal code'}
+                            >
+                              {showP2PSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(activeLiveSession.unlockSecret);
+                                setCopiedLiveSecret(true);
+                                setTimeout(() => setCopiedLiveSecret(false), 2000);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 flex items-center gap-1 cursor-pointer"
+                            >
+                              {copiedLiveSecret ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{copiedLiveSecret ? 'Copied' : 'Copy'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                        <Download className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span>Downloads</span>
-                      </div>
-                      <span className="font-mono font-bold text-white text-xs">
-                        {activeLiveSession.downloadCount || 0}
-                        <span className="text-zinc-500 font-normal">
-                          {' '}/ {activeLiveSession.maxDownloads === 'unlimited' || !activeLiveSession.maxDownloads ? '∞' : activeLiveSession.maxDownloads}
+                    <div className="p-3.5 rounded-xl bg-[#121215] border border-zinc-800 flex flex-col items-center justify-center text-center">
+                      <span className="text-[11px] text-zinc-400 flex items-center gap-1 mb-2">
+                        <QrCode className="w-3.5 h-3.5 text-[#E11D2E]" />
+                        <span>Connection QR</span>
+                      </span>
+                      {activeLiveSession.transferId && (
+                        <>
+                          <div className="p-2 bg-white rounded-lg">
+                            <QRCodeSVG
+                              value={`${window.location.origin}/vault?code=${encodeURIComponent(activeLiveSession.transferId)}`}
+                              size={108}
+                              level="M"
+                            />
+                          </div>
+                          <span className="text-[10px] text-zinc-500 mt-1.5">Scan to open Unlock Code</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* File & Status Banner */}
+                <div className="p-3 rounded-xl bg-[#121215] border border-zinc-800 text-xs text-zinc-300 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="font-semibold text-white">{activeLiveSession.fileName}</span>
+                    <span className="text-zinc-500 ml-2">({formatFileSize(activeLiveSession.fileSize || 0)})</span>
+                  </div>
+                  <span className="text-zinc-400">{liveShareStatusMessage}</span>
+                </div>
+
+                {/* Pause / Resume + Live Progress */}
+                {['TRANSFERRING', 'PAUSED'].includes(activeLiveSession.status) && (
+                  <div className="p-3.5 rounded-xl bg-[#121215] border border-zinc-800 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs text-zinc-300">
+                      {liveShareProgress ? (
+                        <span>
+                          Streaming <strong>{liveShareProgress.fileName}</strong> · {liveShareProgress.percentage}% ({formatFileSize(liveShareProgress.bytesTransferred)} / {formatFileSize(liveShareProgress.totalBytes)}) · {formatP2PSpeed(liveShareProgress.speedBps)} · ETA {liveShareProgress.etaSeconds}s
                         </span>
-                      </span>
+                      ) : (
+                        <span>Encrypted transfer {activeLiveSession.status === 'PAUSED' ? 'paused' : 'in progress'}...</span>
+                      )}
                     </div>
+                    {activeLiveSession.status === 'TRANSFERRING' ? (
+                      <button
+                        type="button"
+                        onClick={() => secureP2PRef.current?.pauseTransfer()}
+                        className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Pause className="w-3.5 h-3.5" />
+                        <span>Pause</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => secureP2PRef.current?.resumeTransfer()}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5" />
+                        <span>Resume</span>
+                      </button>
+                    )}
                   </div>
+                )}
 
-                  <div className="p-2.5 rounded-lg bg-[#121215] border border-[#27272A] text-xs text-zinc-400 flex items-center gap-2">
-                    <Radio className="w-4 h-4 text-[#E11D2E] shrink-0" />
-                    <span>{liveShareStatusMessage || 'Waiting for recipient to connect with access code...'}</span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  {liveShareProgress && (
-                    <div className="space-y-1.5 pt-2">
-                      <div className="flex items-center justify-between text-xs font-medium">
-                        <span className="text-white">Streaming to recipient</span>
-                        <span className="text-[#E11D2E] font-mono">{liveShareProgress.percent}%</span>
-                      </div>
-
-                      <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-red-600 to-[#E11D2E] transition-all duration-150"
-                          style={{ width: `${liveShareProgress.percent}%` }}
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono">
-                        <span>{formatFileSize(liveShareProgress.bytesTransferred)} of {formatFileSize(liveShareProgress.totalBytes)}</span>
-                        <span>{liveShareProgress.speedFormatted}</span>
-                      </div>
+                {/* Connected Recipients Approval Queue */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                    Connected Recipients ({activeLiveSession.recipients?.length || 0})
+                  </h3>
+                  {(!activeLiveSession.recipients || activeLiveSession.recipients.length === 0) ? (
+                    <div className="p-4 rounded-xl bg-[#121215] border border-zinc-800 text-xs text-zinc-400 text-center">
+                      Waiting for recipient to join at <span className="text-white font-mono">/p2p-share</span> with Transfer ID &amp; Secret Unlock Code...
                     </div>
+                  ) : (
+                    activeLiveSession.recipients.map((r) => (
+                      <div
+                        key={r.recipientId}
+                        className="p-3 rounded-xl bg-[#121215] border border-zinc-800 flex flex-wrap items-center justify-between gap-3"
+                      >
+                        <div>
+                          <div className="text-xs font-bold text-white font-mono">{r.recipientId}</div>
+                          <div className="text-[11px] text-zinc-400">
+                            Status: <span className="text-zinc-200">{r.status}</span> · Progress: {r.progress || 0}%
+                          </div>
+                        </div>
+                        {!r.approved ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => secureP2PRef.current?.approveRecipient(r.recipientId)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Accept</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => secureP2PRef.current?.rejectRecipient(r.recipientId)}
+                              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-red-900 text-zinc-200 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>Reject</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Approved
+                          </span>
+                        )}
+                      </div>
+                    ))
                   )}
                 </div>
-
-                {/* Browser Transparency Warning */}
-                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2.5">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Keep this browser tab open.</strong> DocQevrilo never stores your file on disk or cloud servers. The file streams directly from your browser memory. Closing this tab or turning offline will immediately terminate the sharing session.
-                  </span>
-                </div>
-
-                {/* End Sharing Button */}
-                <button
-                  type="button"
-                  onClick={handleEndLiveShare}
-                  className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>End Sharing Session & Disconnect</span>
-                </button>
               </div>
             ) : (
               <>
@@ -1520,7 +1615,9 @@ export default function VaultDashboard({ currentUser }) {
                         Storage Policy & Access Rules
                       </span>
                       <span className="text-[11px] text-zinc-400 block truncate">
-                        {storageMode === 'temporary'
+                        {!storageMode
+                          ? 'Please select how your document should be stored or shared'
+                          : storageMode === 'temporary'
                           ? `Temporary Auto-Purge (${expiryOption})`
                           : storageMode === 'online'
                           ? `Live Online P2P · ${expiryOption} window · ${maxDownloads === 'unlimited' ? 'Unlimited' : `${maxDownloads} recipients`} · Zero Cloud`
@@ -1530,8 +1627,20 @@ export default function VaultDashboard({ currentUser }) {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300">
-                      {storageMode === 'temporary' ? 'Temp Auto-Purge' : storageMode === 'online' ? 'Live P2P' : 'Long-Term'}
+                    <span
+                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                        !storageMode
+                          ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                      }`}
+                    >
+                      {!storageMode
+                        ? 'Select Required'
+                        : storageMode === 'temporary'
+                        ? 'Temp Auto-Purge'
+                        : storageMode === 'online'
+                        ? 'Live P2P'
+                        : 'Long-Term'}
                     </span>
                     {showSettingsAccordion ? (
                       <ChevronUp className="w-4 h-4 text-zinc-400" />
@@ -1548,11 +1657,11 @@ export default function VaultDashboard({ currentUser }) {
                       onChange={(mode) => {
                         setStorageMode(mode);
                         if (mode === 'online') {
-                          if (!['30m', '1h', '2h', '4h'].includes(expiryOption)) {
-                            setExpiryOption('2h');
+                          if (!['5m', '10m', '15m', '30m', '1h'].includes(expiryOption)) {
+                            setExpiryOption('15m');
                           }
-                          if (maxDownloads === 'unlimited' || !maxDownloads) {
-                            setMaxDownloads(5);
+                          if (maxDownloads !== 'unlimited' && maxDownloads !== null && ![1, 2, 5, 10].includes(Number(maxDownloads))) {
+                            setMaxDownloads(1);
                           }
                         } else if (mode === 'temporary') {
                           setExpiryOption('1h');
@@ -1566,7 +1675,14 @@ export default function VaultDashboard({ currentUser }) {
                       }}
                     />
 
-                    {storageMode === 'online' ? (
+                    {!storageMode ? (
+                      <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200 flex items-center gap-2.5">
+                        <SlidersHorizontal className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>
+                          Please select a storage option above (<strong>Temporary Storage</strong>, <strong>Online Sharing (Secure P2P)</strong>, or <strong>Long-Term Storage</strong>) to configure access rules.
+                        </span>
+                      </div>
+                    ) : storageMode === 'online' ? (
                       <OnlineSharingSettings
                         expiry={expiryOption}
                         setExpiry={setExpiryOption}
@@ -1631,7 +1747,7 @@ export default function VaultDashboard({ currentUser }) {
 
               {/* Cloud Limit Warning when file > 250MB */}
               {entryMode === 'file' &&
-                storageMode !== 'online' &&
+                (storageMode === 'temporary' || storageMode === 'long_term') &&
                 selectedFiles.some((f) => f.size > 250 * 1024 * 1024) && (
                   <div className="p-3.5 rounded-xl bg-amber-950/50 border border-amber-600/50 text-xs text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-150">
                     <div className="flex items-start gap-2.5">
@@ -1653,18 +1769,18 @@ export default function VaultDashboard({ currentUser }) {
                   </div>
                 )}
 
-              {/* Online Sharing (Live P2P) Banner when storageMode === 'online' */}
+              {/* Online Sharing (Secure P2P) Banner when storageMode === 'online' */}
               {storageMode === 'online' && entryMode === 'file' && (
                 <div className="p-3.5 rounded-xl bg-red-950/20 border border-[#E11D2E]/40 text-xs text-zinc-300 space-y-1.5 animate-in fade-in duration-150">
                   <div className="flex items-center gap-2">
                     <Radio className="w-4 h-4 text-[#E11D2E] animate-pulse shrink-0" />
-                    <span className="font-bold text-white">Live P2P Online Sharing</span>
+                    <span className="font-bold text-white">Secure P2P Live Sharing (E2EE)</span>
                     <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-950/80 border border-[#E11D2E]/60 text-red-300">
-                      No 250MB Limit · Unlimited File Size
+                      AES-256-GCM + Argon2id
                     </span>
                   </div>
                   <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    Files of any size (e.g. 3.8 GB, 10 GB+) stream directly from your browser memory to the recipient over encrypted WebRTC DataChannel. Zero cloud storage, zero disk writes, completely private.
+                    Files are encrypted locally in your browser and streamed directly over WebRTC DataChannels with Transfer ID, secret unlock code, QR code, and sender approval. Zero cloud storage, zero server secrets.
                   </p>
                 </div>
               )}
@@ -1683,10 +1799,11 @@ export default function VaultDashboard({ currentUser }) {
                 disabled={Boolean(
                   currentUser &&
                     ((entryMode === 'file' ? selectedFiles.length === 0 : !textContent.trim()) ||
+                      !storageMode ||
                       isUploading ||
                       isStartingLiveShare ||
                       (entryMode === 'file' &&
-                        storageMode !== 'online' &&
+                        (storageMode === 'temporary' || storageMode === 'long_term') &&
                         selectedFiles.some((f) => f.size > 250 * 1024 * 1024)))
                 )}
                 className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.99] cursor-pointer ${
@@ -1699,6 +1816,11 @@ export default function VaultDashboard({ currentUser }) {
                   <>
                     <Lock className="w-4 h-4 text-white" />
                     <span>Sign In or Create Account to Upload</span>
+                  </>
+                ) : !storageMode ? (
+                  <>
+                    <SlidersHorizontal className="w-4 h-4" />
+                    <span>Select Storage Policy & Access Rules Above</span>
                   </>
                 ) : isStartingLiveShare ? (
                   <>
@@ -1797,34 +1919,65 @@ export default function VaultDashboard({ currentUser }) {
         {activeTab === 'access' && (
           <div className="vault-panel vault-panel-glow-top p-5 sm:p-7 relative mb-8 animate-in fade-in duration-150">
             {/* Header */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-cyan-400 shadow-inner shrink-0">
                   <KeyRound className="w-5 h-5 text-cyan-400" />
                 </div>
                 <div>
                   <h2 className="text-base sm:text-lg font-bold text-white">Unlock Document or Note</h2>
-                  <p className="text-xs text-zinc-400">Enter a secure access code to decrypt and retrieve files.</p>
+                  <p className="text-xs text-zinc-400">
+                    {isP2PTransferCode
+                      ? 'Enter the Transfer ID (DQV-...) and Secret Unlock Code for E2EE peer-to-peer download.'
+                      : 'Enter a vault access code or Secure P2P Transfer ID to decrypt and retrieve files.'}
+                  </p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextMode = !isP2PTransferCode;
+                  setIsSecureP2PUnlock(nextMode);
+                  setAccessError('');
+                  if (!nextMode) {
+                    handleResetP2PReceiver();
+                  }
+                }}
+                className={`px-3.5 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                  isP2PTransferCode
+                    ? 'bg-[#E11D2E] border-[#E11D2E] text-white shadow-lg shadow-red-950/30'
+                    : 'bg-red-950/40 hover:bg-red-900/60 border-[#E11D2E]/40 text-red-200'
+                }`}
+              >
+                <Radio className="w-3.5 h-3.5" />
+                <span>{isP2PTransferCode ? 'Using Secure P2P Unlock' : 'Unlock Secure P2P Transfer'}</span>
+              </button>
             </div>
 
             {/* Access Form */}
             <form onSubmit={handleAccessSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                  Access Code Credential
+                  {isP2PTransferCode ? 'Transfer ID' : 'Access Code Credential'}
                 </label>
                 <div className="relative">
                   <input
                     type="text"
                     value={accessCodeInput}
                     onChange={(e) => {
-                      setAccessCodeInput(e.target.value.trim());
+                      const val = e.target.value.trim();
+                      setAccessCodeInput(val);
+                      if (/^DQV-/i.test(val)) {
+                        setIsSecureP2PUnlock(true);
+                      }
                       setAccessError('');
                       if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
                     }}
-                    placeholder="Enter access code... (e.g. 6-char live code or 10-char vault code)"
+                    placeholder={
+                      isP2PTransferCode
+                        ? 'Enter Transfer ID... (e.g. DQV-A7X9-4421)'
+                        : 'Enter vault code, 6-char live code, or DQV-... Transfer ID'
+                    }
                     className="w-full rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none transition-all pr-20"
                   />
                   <button
@@ -1833,7 +1986,9 @@ export default function VaultDashboard({ currentUser }) {
                       try {
                         const text = await navigator.clipboard.readText();
                         if (text) {
-                          setAccessCodeInput(text.trim());
+                          const trimmed = text.trim();
+                          setAccessCodeInput(trimmed);
+                          if (/^DQV-/i.test(trimmed)) setIsSecureP2PUnlock(true);
                           if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
                         }
                       } catch {}
@@ -1844,14 +1999,65 @@ export default function VaultDashboard({ currentUser }) {
                   </button>
                 </div>
                 <p className="text-[11px] text-zinc-500 mt-1.5">
-                  Format: 6-character live code or 10-character vault code with secure hash verification in TiDB Cloud
+                  {isP2PTransferCode
+                    ? 'Format: DQV-XXXX-XXXX Transfer ID from the sender\'s Online Sharing (Secure P2P) session'
+                    : 'Format: 10-character vault code, 6-character live code, or DQV-... Secure P2P Transfer ID'}
                 </p>
               </div>
+
+              {isP2PTransferCode && (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                    Secret Unlock Code
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showP2PUnlockSecret ? 'text' : 'password'}
+                      value={p2pUnlockSecret}
+                      onChange={(e) => {
+                        setP2pUnlockSecret(e.target.value);
+                        setAccessError('');
+                      }}
+                      placeholder="Enter the sender's Secret Unlock Code..."
+                      className="w-full rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none transition-all pr-28"
+                    />
+                    <div className="absolute right-2 top-2 flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowP2PUnlockSecret((v) => !v)}
+                        className="px-2 py-1 text-xs text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 rounded-lg transition-all cursor-pointer"
+                        title={showP2PUnlockSecret ? 'Hide secret' : 'Show secret'}
+                      >
+                        {showP2PUnlockSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const text = await navigator.clipboard.readText();
+                            if (text) setP2pUnlockSecret(text.trim());
+                          } catch {}
+                        }}
+                        className="px-2.5 py-1 text-xs font-mono text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 rounded-lg transition-all cursor-pointer"
+                      >
+                        Paste
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-1.5">
+                    Used locally with Argon2id + AES-256-GCM to decrypt files in your browser. Never sent to the server.
+                  </p>
+                </div>
+              )}
 
               {/* Rate limit & security note */}
               <div className="flex items-center gap-2 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-400">
                 <Shield className="w-4 h-4 text-[#E11D2E] shrink-0" />
-                <span>Protected with SHA-256 hash lookup and persistent anti-brute-force rate limiting.</span>
+                <span>
+                  {isP2PTransferCode
+                    ? 'Zero-knowledge WebRTC E2EE: unlock code stays in your browser and requires sender approval.'
+                    : 'Protected with SHA-256 hash lookup and persistent anti-brute-force rate limiting.'}
+                </span>
               </div>
 
               {/* Error Banner */}
@@ -1865,22 +2071,127 @@ export default function VaultDashboard({ currentUser }) {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={!accessCodeInput || isVerifying}
+                disabled={!accessCodeInput || (isP2PTransferCode && !p2pUnlockSecret.trim()) || isVerifying}
                 className="w-full py-3 px-4 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-950/30 cursor-pointer"
               >
                 {isVerifying ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Verifying with TiDB Cloud...</span>
+                    <span>{isP2PTransferCode ? 'Connecting to Peer...' : 'Verifying with TiDB Cloud...'}</span>
                   </>
                 ) : (
                   <>
                     <Unlock className="w-4 h-4" />
-                    <span>Unlock Document</span>
+                    <span>{isP2PTransferCode ? 'Connect & Unlock Secure P2P' : 'Unlock Document'}</span>
                   </>
                 )}
               </button>
             </form>
+
+            {/* Inline Secure P2P Receiver Status & Downloads */}
+            {p2pReceiverState && (
+              <div className="mt-6 p-5 rounded-2xl bg-[#0E0E10] border border-[#27272A] space-y-4 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-[#27272A]">
+                  <div className="flex items-center gap-2.5">
+                    <Radio className={`w-4 h-4 text-[#E11D2E] ${['COMPLETED', 'EXPIRED', 'CANCELLED', 'FAILED'].includes(p2pReceiverState.status) ? '' : 'animate-pulse'}`} />
+                    <span className="text-xs font-bold text-white font-mono">
+                      {p2pReceiverState.transferId || accessCodeInput.toUpperCase()}
+                    </span>
+                    <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200 font-semibold">
+                      {p2pReceiverState.status === 'WAITING_FOR_APPROVAL' && 'Waiting for Sender Approval'}
+                      {p2pReceiverState.status === 'APPROVED' && 'Approved — Establishing WebRTC'}
+                      {p2pReceiverState.status === 'DERIVING_KEY' && 'Deriving AES-256-GCM Key'}
+                      {p2pReceiverState.status === 'TRANSFERRING' && 'Decrypting & Receiving'}
+                      {p2pReceiverState.status === 'PAUSED' && 'Paused by Sender'}
+                      {p2pReceiverState.status === 'COMPLETED' && 'Verified & Decrypted'}
+                      {p2pReceiverState.status === 'EXPIRED' && 'Session Expired'}
+                      {p2pReceiverState.status === 'CANCELLED' && 'Stopped by Sender'}
+                      {p2pReceiverState.status === 'FAILED' && 'Transfer Failed'}
+                      {!['WAITING_FOR_APPROVAL', 'APPROVED', 'DERIVING_KEY', 'TRANSFERRING', 'PAUSED', 'COMPLETED', 'EXPIRED', 'CANCELLED', 'FAILED'].includes(p2pReceiverState.status) && (p2pReceiverState.status || 'Connecting')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {typeof p2pReceiverState.remainingSeconds === 'number' && !['EXPIRED', 'CANCELLED'].includes(p2pReceiverState.status) && (
+                      <span className="text-xs font-mono text-zinc-300 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#E11D2E]" />
+                        <span>{formatP2PCountdown(p2pReceiverState.remainingSeconds)}</span>
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleResetP2PReceiver}
+                      className="text-[11px] text-zinc-400 hover:text-white px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 transition-colors cursor-pointer"
+                    >
+                      Disconnect / Clear
+                    </button>
+                  </div>
+                </div>
+
+                {p2pReceiverState.status === 'WAITING_FOR_APPROVAL' && (
+                  <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200 flex items-center gap-2.5">
+                    <RefreshCw className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
+                    <span>Connected to signaling room. Waiting for the sender to approve your request...</span>
+                  </div>
+                )}
+
+                {p2pReceiverProgress && (
+                  <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-300 font-semibold">
+                        {p2pReceiverProgress.percentage}% ({formatFileSize(p2pReceiverProgress.bytesTransferred)} / {formatFileSize(p2pReceiverProgress.totalBytes)})
+                      </span>
+                      <span className="font-mono text-zinc-400">
+                        {p2pReceiverProgress.speedBps ? `${formatFileSize(p2pReceiverProgress.speedBps)}/s` : ''}
+                        {p2pReceiverProgress.etaSeconds != null && p2pReceiverState.status === 'TRANSFERRING'
+                          ? ` • ETA ${p2pReceiverProgress.etaSeconds}s`
+                          : ''}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-zinc-900 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#E11D2E] transition-all duration-200"
+                        style={{ width: `${Math.min(100, p2pReceiverProgress.percentage || 0)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {Array.isArray(p2pReceiverState.files) && p2pReceiverState.files.length > 0 && (
+                  <div className="space-y-2.5">
+                    <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Decrypted Files ({p2pReceiverState.files.filter((f) => f.completed).length}/{p2pReceiverState.files.length})</span>
+                    </div>
+                    {p2pReceiverState.files.map((file) => (
+                      <div
+                        key={file.fileId}
+                        className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-white truncate">{file.name}</div>
+                          <div className="text-[11px] text-zinc-400 font-mono mt-0.5 flex flex-wrap items-center gap-2">
+                            <span>{formatFileSize(file.size)}</span>
+                            {file.sha256 && <span className="text-emerald-400 truncate">SHA-256: {file.sha256.slice(0, 16)}...</span>}
+                          </div>
+                        </div>
+                        {file.completed && file.blobUrl ? (
+                          <a
+                            href={file.blobUrl}
+                            download={file.name}
+                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white flex items-center gap-1.5 shrink-0 transition-colors"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download</span>
+                          </a>
+                        ) : (
+                          <span className="text-[11px] font-mono text-zinc-400 shrink-0">Receiving...</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Live Online P2P Share Result View */}
             {unlockedLiveShareCode && (

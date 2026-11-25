@@ -804,20 +804,25 @@ export class P2PReceiverSession {
       dc.binaryType = 'arraybuffer';
       this.dc = dc;
 
-      dc.onmessage = async (msgEvent) => {
-        if (this.aborted) return;
-        try {
-          if (typeof msgEvent.data === 'string') {
-            await this._handleControlMessage(JSON.parse(msgEvent.data));
-          } else {
-            await this._handleBinaryChunk(msgEvent.data);
+      // Serialize DataChannel message processing so kdf-params finishes before encrypted-manifest
+      // and binary chunks are decrypted/hashed strictly in order.
+      let msgQueue = Promise.resolve();
+      dc.onmessage = (msgEvent) => {
+        msgQueue = msgQueue.then(async () => {
+          if (this.aborted) return;
+          try {
+            if (typeof msgEvent.data === 'string') {
+              await this._handleControlMessage(JSON.parse(msgEvent.data));
+            } else {
+              await this._handleBinaryChunk(msgEvent.data);
+            }
+          } catch (err) {
+            this._wipeUnverifiedBuffers();
+            this._emitState({ status: 'FAILED' });
+            this.callbacks.onError?.(err.message || 'Decryption or integrity verification failed.');
+            this.disconnect();
           }
-        } catch (err) {
-          this._wipeUnverifiedBuffers();
-          this._emitState({ status: 'FAILED' });
-          this.callbacks.onError?.(err.message || 'Decryption or integrity verification failed.');
-          this.disconnect();
-        }
+        });
       };
     };
 

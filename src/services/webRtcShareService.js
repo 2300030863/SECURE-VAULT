@@ -253,6 +253,8 @@ export class PeerTransferController {
     recipientId,
     file,
     fileSha256 = null,
+    getSha256Fn = null,
+    readChunkFn = null,
     iceServers = DEFAULT_STUN_SERVERS,
     onSignal = () => { },
     onStatusChange = () => { },
@@ -264,6 +266,8 @@ export class PeerTransferController {
     this.recipientId = recipientId;
     this.file = file;
     this.fileSha256 = fileSha256;
+    this.getSha256Fn = getSha256Fn;
+    this.readChunkFn = readChunkFn;
     this.iceServers = iceServers;
     this.onSignal = onSignal;
     this.onStatusChange = onStatusChange;
@@ -284,6 +288,8 @@ export class PeerTransferController {
     this.totalBytes = file ? file.size : 0;
     this.startTime = 0;
     this.statsTimer = null;
+    this.lastProgressEmit = 0;
+    this.currentChunkIndex = 0;
   }
 
   /**
@@ -560,8 +566,13 @@ export class PeerTransferController {
           return;
         }
 
-        const slice = this.file.slice(offset, offset + CHUNK_SIZE);
-        const arrayBuffer = await slice.arrayBuffer();
+        const arrayBuffer = this.readChunkFn
+          ? await this.readChunkFn(seq, offset, CHUNK_SIZE)
+          : await this.file.slice(offset, offset + CHUNK_SIZE).arrayBuffer();
+
+        if (this.isClosed || !this.dataChannel || this.dataChannel.readyState !== 'open') {
+          return;
+        }
 
         // 8-byte sequential envelope: [seq (Uint32), totalChunks (Uint32)]
         const packet = new Uint8Array(8 + arrayBuffer.byteLength);
@@ -579,32 +590,48 @@ export class PeerTransferController {
 
         offset += arrayBuffer.byteLength;
         seq++;
+        this.currentChunkIndex = seq;
         this.bytesTransferred = offset;
 
-        // Progress calculation
-        const elapsedSec = Math.max((Date.now() - this.startTime) / 1000, 0.001);
-        const speedBytesPerSec = this.bytesTransferred / elapsedSec;
-        const progressPercent = Math.min((this.bytesTransferred / this.totalBytes) * 100, 100);
+        // Progress calculation (throttled to ~150ms for smooth multi-peer UI)
+        const now = Date.now();
+        if (now - this.lastProgressEmit >= 150 || offset >= this.file.size) {
+          this.lastProgressEmit = now;
+          const elapsedSec = Math.max((now - this.startTime) / 1000, 0.001);
+          const speedBytesPerSec = this.bytesTransferred / elapsedSec;
+          const remainingBytes = Math.max(0, this.totalBytes - this.bytesTransferred);
+          const etaSeconds = speedBytesPerSec > 0 ? Math.ceil(remainingBytes / speedBytesPerSec) : 0;
+          const progressPercent = Math.min((this.bytesTransferred / this.totalBytes) * 100, 100);
 
-        this.onProgress({
-          recipientId: this.recipientId,
-          bytesTransferred: this.bytesTransferred,
-          totalBytes: this.totalBytes,
-          percent: Number(progressPercent.toFixed(1)),
-          speedFormatted: `${formatFileSize(speedBytesPerSec)}/s`,
-          timeElapsedSec: Math.floor(elapsedSec),
-        });
+          this.onProgress({
+            recipientId: this.recipientId,
+            bytesTransferred: this.bytesTransferred,
+            totalBytes: this.totalBytes,
+            percent: Number(progressPercent.toFixed(1)),
+            speedBytesPerSec,
+            speedFormatted: `${formatFileSize(speedBytesPerSec)}/s`,
+            etaSeconds,
+            timeElapsedSec: Math.floor(elapsedSec),
+          });
+        }
+
+        // Yield to the event loop every 4 chunks so concurrent recipients interleave cleanly
+        if (seq % 4 === 0 && offset < this.file.size) {
+          setTimeout(() => sendNextChunk(), 0);
+          return;
+        }
       }
 
       // 3. Send complete packet & wait for verification acknowledgement
       if (offset >= this.file.size) {
+        const resolvedSha256 = this.fileSha256 || (this.getSha256Fn ? this.getSha256Fn() : null);
         try {
           this.dataChannel.send(
             JSON.stringify({
               type: 'complete',
               totalChunks,
               fileSize: this.file.size,
-              sha256: this.fileSha256 || null,
+              sha256: resolvedSha256 || null,
             })
           );
         } catch (_) { }
@@ -788,7 +815,8 @@ export class WebRtcShareSession {
 
     // Owner State: Map of recipientId -> PeerTransferController
     this.peerControllers = new Map();
-    this.recipientsState = new Map(); // recipientId -> { recipientId, percent, bytesTransferred, speed, status }
+    this.recipientsState = new Map(); // recipientId -> { recipientId, percent, bytesTransferred, speed, etaSeconds, status }
+    this.sharedChunkCache = new Map(); // seq -> Promise<ArrayBuffer> (bounded LRU max 32 chunks)
 
     // Recipient State: Single RTCPeerConnection and DataChannel
     this.peerConnection = null;
@@ -829,6 +857,9 @@ export class WebRtcShareSession {
       if (this.role === 'owner' && this.file) {
         computeSha256(this.file).then((hash) => {
           this.fileSha256 = hash;
+          for (const ctrl of this.peerControllers.values()) {
+            ctrl.fileSha256 = hash;
+          }
           console.log(`[File SHA-256 Digest] ${this.file.name}: ${hash}`);
         });
       }
@@ -1086,7 +1117,19 @@ export class WebRtcShareSession {
         }
         if (payload?.recipients && Array.isArray(payload.recipients)) {
           for (const r of payload.recipients) {
-            this.recipientsState.set(r.recipientId, r);
+            const local = this.recipientsState.get(r.recipientId);
+            if (!local) {
+              this.recipientsState.set(r.recipientId, r);
+            } else {
+              // Preserve live local WebRTC progress/speed/ETA/connectionType; only sync terminal/completed flags
+              if (r.downloadCompleted || r.status === 'completed') {
+                local.downloadCompleted = true;
+                local.status = 'completed';
+                local.percent = 100;
+              } else if (r.status === 'disconnected') {
+                local.status = 'disconnected';
+              }
+            }
           }
           this.notifyRecipientsUpdate();
         }
@@ -1116,6 +1159,24 @@ export class WebRtcShareSession {
   // -------------------------------------------------------------------------
 
   /**
+   * Shared bounded read-through chunk cache (max 32 chunks = ~2MB).
+   * Prevents repeatedly reading the same file slices when multiple recipients stream concurrently.
+   */
+  readSharedChunk(seq, offset, chunkSize) {
+    if (!this.file) return Promise.resolve(new ArrayBuffer(0));
+    if (this.sharedChunkCache.has(seq)) {
+      return this.sharedChunkCache.get(seq);
+    }
+    const readPromise = this.file.slice(offset, offset + chunkSize).arrayBuffer();
+    if (this.sharedChunkCache.size >= 32) {
+      const oldestKey = this.sharedChunkCache.keys().next().value;
+      this.sharedChunkCache.delete(oldestKey);
+    }
+    this.sharedChunkCache.set(seq, readPromise);
+    return readPromise;
+  }
+
+  /**
    * Owner establishes an independent connection for a newly joined recipient.
    */
   async handleOwnerRecipientJoined(recipientId) {
@@ -1136,6 +1197,8 @@ export class WebRtcShareSession {
       bytesTransferred: 0,
       totalBytes: this.file.size,
       speed: '',
+      etaSeconds: 0,
+      connectionType: 'Direct P2P',
       connectedAt: Date.now(),
       downloadCompleted: false,
     });
@@ -1145,9 +1208,18 @@ export class WebRtcShareSession {
       recipientId,
       file: this.file,
       fileSha256: this.fileSha256,
+      getSha256Fn: () => this.fileSha256,
+      readChunkFn: (seq, offset, chunkSize) => this.readSharedChunk(seq, offset, chunkSize),
       iceServers: this.iceServers,
       onSignal: (signalType, payload) => {
         this.sendSignal(signalType, payload, recipientId);
+      },
+      onConnectionType: ({ connectionType }) => {
+        const existing = this.recipientsState.get(recipientId);
+        if (existing) {
+          existing.connectionType = connectionType;
+          this.notifyRecipientsUpdate();
+        }
       },
       onStatusChange: ({ status, message }) => {
         const existing = this.recipientsState.get(recipientId);
@@ -1168,6 +1240,7 @@ export class WebRtcShareSession {
           existing.bytesTransferred = progress.bytesTransferred;
           existing.percent = progress.percent;
           existing.speed = progress.speedFormatted;
+          existing.etaSeconds = progress.etaSeconds;
           this.notifyRecipientsUpdate();
         }
         this.onProgress(progress);
@@ -1598,6 +1671,11 @@ export class WebRtcShareSession {
           pollUrl += `&recipientId=${encodeURIComponent(this.recipientId)}`;
         }
         const res = await fetch(pollUrl);
+        if (res.status === 410 || res.status === 404) {
+          this.onError('The owner has ended the sharing session.');
+          this.close();
+          return;
+        }
         if (!res.ok) return;
         const data = await res.json();
         for (const msg of data.messages || []) {
@@ -1625,6 +1703,9 @@ export class WebRtcShareSession {
         await this.handleRecipientCandidate(payload);
       } else if (type === 'recipient-disconnect') {
         this.onError('You were disconnected by the file owner.');
+        this.close();
+      } else if (type === 'session-ended') {
+        this.onError(payload?.message || 'The owner has ended the sharing session.');
         this.close();
       }
     }

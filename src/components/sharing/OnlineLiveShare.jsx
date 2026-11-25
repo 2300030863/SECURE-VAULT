@@ -27,12 +27,23 @@ import { authService } from '../../services/authService';
 import { WebRtcShareSession, formatFileSize } from '../../services/webRtcShareService';
 import JSZip from 'jszip';
 
+function formatCountdown(totalSeconds = 0) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  if (hrs > 0) {
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
 export default function OnlineLiveShare({
   currentUser = null,
   initialAccessCode = '',
   initialFile = null,
   autoStart = false,
-  initialDuration = 120,
+  initialDuration = 15,
   initialMaxDownloads = 5,
   initialDeleteAfterDownload = false,
 }) {
@@ -43,11 +54,12 @@ export default function OnlineLiveShare({
   // ---------------------------------------------------------------------------
   const [selectedFile, setSelectedFile] = useState(initialFile || null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
-  const [liveDurationMinutes, setLiveDurationMinutes] = useState(initialDuration || 120);
+  const [liveDurationMinutes, setLiveDurationMinutes] = useState(initialDuration || 15);
   const [maxDownloadsLimit, setMaxDownloadsLimit] = useState(initialMaxDownloads || 5);
   const [burnOnFinish, setBurnOnFinish] = useState(Boolean(initialDeleteAfterDownload));
   const [showLiveSettings, setShowLiveSettings] = useState(false);
   const [activeSession, setActiveSession] = useState(null); // { sessionId, accessCode, ownerToken, fileName, fileSize, expiresAt }
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [ownerShareStatus, setOwnerShareStatus] = useState('idle'); // 'idle' | 'ready' | 'connecting' | 'transferring' | 'complete' | 'error'
   const [ownerStatusMessage, setOwnerStatusMessage] = useState('');
   const [ownerProgress, setOwnerProgress] = useState(null); // { percent, speedFormatted, bytesTransferred, totalBytes }
@@ -74,6 +86,11 @@ export default function OnlineLiveShare({
   const fileInputRef = useRef(null);
   const webRtcSessionRef = useRef(null);
   const heartbeatTimerRef = useRef(null);
+  const activeSessionRef = useRef(null);
+
+  useEffect(() => {
+    activeSessionRef.current = activeSession;
+  }, [activeSession]);
 
   // Auto-fill initial access code if provided via props/URL
   useEffect(() => {
@@ -96,23 +113,23 @@ export default function OnlineLiveShare({
   }, [initialFile, autoStart]);
 
   // ---------------------------------------------------------------------------
-  // Browser Unload Protection: Instantly end session when tab closes or owner goes offline
+  // Browser Unload Protection: Instantly end session ONLY on tab close / component unmount
+  // (Never run cleanup when activeSession updates!)
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const handleUnloadOrHide = () => {
-      if (activeSession?.sessionId && activeSession?.ownerToken) {
+      const sess = activeSessionRef.current;
+      if (sess?.sessionId && sess?.ownerToken) {
         const payload = JSON.stringify({
-          sessionId: activeSession.sessionId,
-          ownerToken: activeSession.ownerToken,
+          sessionId: sess.sessionId,
+          ownerToken: sess.ownerToken,
         });
 
-        // 1. Send via Beacon with application/json
         try {
           const blob = new Blob([payload], { type: 'application/json' });
           navigator.sendBeacon(`${getApiBaseUrl()}/online-share/end`, blob);
         } catch (_) {}
 
-        // 2. Fallback keepalive fetch
         try {
           fetch(`${getApiBaseUrl()}/online-share/end`, {
             method: 'POST',
@@ -129,29 +146,30 @@ export default function OnlineLiveShare({
     return () => {
       window.removeEventListener('beforeunload', handleUnloadOrHide);
       window.removeEventListener('pagehide', handleUnloadOrHide);
-    };
-  }, [activeSession]);
-
-  // Clean up WebRTC & Heartbeat on unmount
-  useEffect(() => {
-    return () => {
       if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
       if (webRtcSessionRef.current) webRtcSessionRef.current.close();
-      if (activeSession?.sessionId && activeSession?.ownerToken) {
-        try {
-          fetch(`${getApiBaseUrl()}/online-share/end`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: activeSession.sessionId,
-              ownerToken: activeSession.ownerToken,
-            }),
-            keepalive: true,
-          }).catch(() => {});
-        } catch (_) {}
+      handleUnloadOrHide();
+    };
+  }, []);
+
+  // Live 1-second countdown from session creation; auto-terminates all transfers on expiry
+  useEffect(() => {
+    if (!activeSession?.expiresAt) {
+      setRemainingSeconds(0);
+      return;
+    }
+    const expiryMs = new Date(activeSession.expiresAt).getTime();
+    const updateTimer = () => {
+      const rem = Math.max(0, Math.ceil((expiryMs - Date.now()) / 1000));
+      setRemainingSeconds(rem);
+      if (rem <= 0) {
+        handleEndSharing('Session duration expired. All active transfers terminated.');
       }
     };
-  }, [activeSession]);
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession?.sessionId, activeSession?.expiresAt]);
 
   // ---------------------------------------------------------------------------
   // OWNER ACTIONS
@@ -289,7 +307,20 @@ export default function OnlineLiveShare({
             );
           }
           if (data.recipients && Array.isArray(data.recipients)) {
-            setConnectedRecipients(data.recipients);
+            setConnectedRecipients((prev) => {
+              const byId = new Map(prev.map((r) => [r.recipientId, r]));
+              for (const sr of data.recipients) {
+                const local = byId.get(sr.recipientId);
+                if (!local) {
+                  byId.set(sr.recipientId, sr);
+                } else if (sr.downloadCompleted || sr.status === 'completed') {
+                  byId.set(sr.recipientId, { ...local, status: 'completed', percent: 100, downloadCompleted: true });
+                } else if (sr.status === 'disconnected') {
+                  byId.set(sr.recipientId, { ...local, status: 'disconnected' });
+                }
+              }
+              return Array.from(byId.values());
+            });
           }
         } else {
           console.warn('[Heartbeat Error] Session may have been ended.');
@@ -386,7 +417,7 @@ export default function OnlineLiveShare({
   /**
    * Ends the sharing session immediately
    */
-  const handleEndSharing = async () => {
+  const handleEndSharing = async (endMessage = '') => {
     if (heartbeatTimerRef.current) {
       clearInterval(heartbeatTimerRef.current);
       heartbeatTimerRef.current = null;
@@ -397,24 +428,26 @@ export default function OnlineLiveShare({
       webRtcSessionRef.current = null;
     }
 
-    if (activeSession?.sessionId) {
+    const sess = activeSessionRef.current || activeSession;
+    if (sess?.sessionId) {
       try {
         await fetch(`${getApiBaseUrl()}/online-share/end`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sessionId: activeSession.sessionId,
-            ownerToken: activeSession.ownerToken,
+            sessionId: sess.sessionId,
+            ownerToken: sess.ownerToken,
           }),
         });
       } catch (_) {}
     }
 
     setActiveSession(null);
+    setConnectedRecipients([]);
     setSelectedFile(null);
     setOwnerShareStatus('idle');
     setOwnerProgress(null);
-    setOwnerStatusMessage('');
+    setOwnerStatusMessage(typeof endMessage === 'string' ? endMessage : '');
   };
 
   const copyAccessCode = () => {
@@ -756,10 +789,10 @@ export default function OnlineLiveShare({
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
+                      { minutes: 15, label: '15 Minutes (Default)' },
                       { minutes: 30, label: '30 Minutes' },
                       { minutes: 60, label: '1 Hour' },
                       { minutes: 120, label: '2 Hours' },
-                      { minutes: 240, label: '4 Hours' },
                     ].map((opt) => (
                       <button
                         key={opt.minutes}
@@ -915,9 +948,17 @@ export default function OnlineLiveShare({
                     </span>
                   </div>
 
-                  <span className="text-[11px] text-zinc-400">
-                    Heartbeat: <span className="text-emerald-400 font-mono">10s Active</span>
-                  </span>
+                  <div className="flex items-center gap-3 text-[11px] text-zinc-400">
+                    <span className="px-2.5 py-0.5 rounded-md bg-[#121215] border border-zinc-800 font-mono text-white flex items-center gap-1.5">
+                      <Clock className="w-3 h-3 text-[#E11D2E]" />
+                      <span className={remainingSeconds <= 60 ? 'text-red-400 font-bold' : ''}>
+                        {formatCountdown(remainingSeconds)}
+                      </span>
+                    </span>
+                    <span className="hidden sm:inline">
+                      Heartbeat: <span className="text-emerald-400 font-mono">Active</span>
+                    </span>
+                  </div>
                 </div>
 
                 <div className="text-xs text-zinc-300">
@@ -1101,7 +1142,11 @@ export default function OnlineLiveShare({
                                   {formatFileSize(recipient.bytesTransferred || 0)} of{' '}
                                   {formatFileSize(recipient.totalBytes || activeSession.fileSize)}
                                 </span>
-                                <span>{recipient.speed || (isCompleted ? 'Finished' : '')}</span>
+                                <span>
+                                  {isCompleted
+                                    ? 'Finished'
+                                    : `${recipient.speed || '0 KB/s'}${recipient.etaSeconds > 0 ? ` · ETA ${recipient.etaSeconds}s` : ''}`}
+                                </span>
                               </div>
                             </div>
                           )}

@@ -18,33 +18,36 @@ export default function OnlineSharingSettings({
   setDeleteAfterDownload,
 }) {
   const expiryOptions = [
+    { label: '5 Minutes', value: '5m' },
+    { label: '10 Minutes', value: '10m' },
+    { label: '15 Minutes (Default)', value: '15m' },
     { label: '30 Minutes', value: '30m' },
     { label: '1 Hour', value: '1h' },
-    { label: '2 Hours (Default)', value: '2h' },
-    { label: '4 Hours', value: '4h' },
   ];
 
   const downloadLimitOptions = [
-    { label: '1 Recipient (Single-Use)', value: 1 },
-    { label: '3 Recipients', value: 3 },
-    { label: '5 Recipients (Default)', value: 5 },
-    { label: 'Unlimited (While Online)', value: 'unlimited' },
+    { label: '1 Recipient (Default)', value: 1 },
+    { label: '2 Recipients', value: 2 },
+    { label: '5 Recipients', value: 5 },
+    { label: '10 Recipients', value: 10 },
+    { label: 'Unlimited', value: 'unlimited' },
   ];
 
   const formatSummary = () => {
-    let expText = '2 hours';
-    if (expiry === '30m') expText = '30 minutes';
+    let expText = '15 minutes';
+    if (expiry === '5m') expText = '5 minutes';
+    else if (expiry === '10m') expText = '10 minutes';
+    else if (expiry === '15m') expText = '15 minutes';
+    else if (expiry === '30m') expText = '30 minutes';
     else if (expiry === '1h') expText = '1 hour';
-    else if (expiry === '2h') expText = '2 hours';
-    else if (expiry === '4h') expText = '4 hours';
     else expText = expiry;
 
-    const dlText =
-      maxDownloads === 'unlimited' || maxDownloads === null || maxDownloads === 0
-        ? 'Unlimited recipients'
-        : `${maxDownloads} recipient${maxDownloads > 1 ? 's' : ''}`;
+    const isUnlimited = maxDownloads === 'unlimited' || maxDownloads === null;
+    const dlText = isUnlimited
+      ? 'unlimited recipients'
+      : `${Number(maxDownloads) || 1} recipient${Number(maxDownloads) > 1 ? 's' : ''}`;
 
-    const delText = deleteAfterDownload ? 'Burn on 1st download' : 'Keep active until window closes';
+    const delText = deleteAfterDownload ? 'One-Time Access ON' : 'Reusable within window';
 
     return { expText, dlText, delText };
   };
@@ -150,7 +153,7 @@ export default function OnlineSharingSettings({
           </div>
           <div>
             <div className="text-xs font-semibold text-white flex items-center gap-1.5">
-              <span>Auto-End After 1st Transfer (Burn on Finish)</span>
+              <span>One-Time Access (Single Completed Transfer)</span>
               {deleteAfterDownload && (
                 <span className="px-1.5 py-0.2 rounded bg-red-950/80 text-red-400 text-[10px] font-bold border border-red-900/40">
                   ON
@@ -158,7 +161,7 @@ export default function OnlineSharingSettings({
               )}
             </div>
             <p className="text-[11px] text-zinc-400 mt-0.5">
-              Instantly terminates the live P2P sharing session and destroys the 6-character access code as soon as the first recipient finishes downloading.
+              Automatically blocks all future joins as soon as one authorized recipient completes a verified download.
             </p>
           </div>
         </div>

@@ -417,14 +417,15 @@ export default function SecureP2PShare() {
                     Max Recipients
                   </label>
                   <select
-                    value={maxRecipients}
-                    onChange={(e) => setMaxRecipients(Number(e.target.value))}
+                    value={maxRecipients == null ? 'unlimited' : maxRecipients}
+                    onChange={(e) => setMaxRecipients(e.target.value === 'unlimited' ? null : Number(e.target.value))}
                     className="w-full px-3 py-2 rounded-lg bg-[#0B0B0D] border border-zinc-700 text-white text-xs focus:outline-none focus:border-[#E11D2E]"
                   >
                     <option value={1}>1 recipient (Default)</option>
                     <option value={2}>2 recipients</option>
                     <option value={5}>5 recipients</option>
                     <option value={10}>10 recipients</option>
+                    <option value="unlimited">Unlimited recipients</option>
                   </select>
                 </div>
               </div>
@@ -553,7 +554,7 @@ export default function SecureP2PShare() {
                   {senderState.status.replace(/_/g, ' ')}
                 </span>
                 <span className="text-xs text-zinc-400">
-                  Recipients: <strong className="text-white">{senderState.recipientCount} / {senderState.maxRecipients}</strong>
+                  Recipients: <strong className="text-white">{senderState.recipientCount} / {senderState.maxRecipients == null ? '∞' : senderState.maxRecipients}</strong>
                 </span>
               </div>
 
@@ -691,10 +692,7 @@ export default function SecureP2PShare() {
                   {showQr && senderState.transferId && (
                     <div className="p-2 bg-white rounded-lg">
                       <QRCodeSVG
-                        value={JSON.stringify({
-                          transferId: senderState.transferId,
-                          unlockSecret: senderState.unlockSecret,
-                        })}
+                        value={`${window.location.origin}/vault?code=${encodeURIComponent(senderState.transferId)}`}
                         size={112}
                         level="M"
                       />
