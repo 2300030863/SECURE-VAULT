@@ -136,7 +136,11 @@ export default function Welcome({ currentUser }) {
     },
     {
       q: 'Can I share my documents with people who do not have an account?',
-      a: 'Yes, absolutely. When you upload or share a document, DocQevrilo generates a unique 10-character cryptographic access code (or a direct link). Recipients do not need to register—they simply enter the access code on the Unlock tab to view or download the file according to the permissions you established.',
+      a: 'Yes, absolutely. Using our 6-step guided wizard, you can share via Encrypted Cloud Archive (generating a 10-character access code) or Live P2P (generating a single Unified Secure ID and privacy-blurred QR code). Recipients do not need to register—they simply enter the code or scan the QR code in the Unlock tab.',
+    },
+    {
+      q: 'How does Live P2P Secure ID & Blurred QR sharing work?',
+      a: 'Live P2P transfers files directly between browsers over encrypted WebRTC DataChannels using Argon2id and AES-256-GCM—zero file bytes or secrets ever touch our servers. One Secure ID contains both the room identifier and your E2EE key, and generated QR codes stay blurred until you click Show QR. Recipients can also scan QR codes directly using the built-in Unlock QR Scanner.',
     },
     {
       q: 'Do recipients need an account to view or download shared files?',
@@ -233,7 +237,7 @@ export default function Welcome({ currentUser }) {
           {/* Cryptographic Trust Indicator */}
           <div className="sv-hero-trust sv-trust-v2">
             <ShieldCheck size={18} className="text-[#E11D2E]" />
-            <span>HMAC SHA-256 verification · Zero-knowledge hash lookups · Encrypted storage</span>
+            <span>WebRTC E2EE (AES-256-GCM + Argon2id) · Unified Secure ID · Privacy-Blurred QR · Encrypted B2 Vault</span>
           </div>
         </div>
 
@@ -291,16 +295,16 @@ export default function Welcome({ currentUser }) {
 
             <div className="sv-vault-access">
               <div className="sv-access-heading">
-                <span><KeyRound size={12} /> SINGLE-USE ACCESS KEY</span>
-                <span className="sv-access-private">HMAC SHA-256</span>
+                <span><KeyRound size={12} /> UNIFIED SECURE ID &amp; QR</span>
+                <span className="sv-access-private">AES-256-GCM</span>
               </div>
               <div className="sv-code-display">
-                <span>A1B95</span>
-                <span>@</span>
-                <span>3he5</span>
+                <span>DQV1</span>
+                <span>•</span>
+                <span>QR</span>
               </div>
               <div className="sv-code-footer">
-                <span><Clock size={11} /> Configurable auto-destruct timer</span>
+                <span><Clock size={11} /> 6-step guided share · Blurred QR privacy</span>
               </div>
             </div>
 
@@ -586,15 +590,15 @@ export default function Welcome({ currentUser }) {
             <div className="sv-pillar-content">
               <div className="sv-pillar-header">
                 <UploadCloud size={22} className="text-[#E11D2E]" />
-                <h3>Document Upload</h3>
+                <h3>6-Step Guided Sharing Wizard</h3>
               </div>
               <p>
-                Users can upload their documents through a streamlined drag-and-drop interface. The system validates supported file formats (PDF, DOCX, XLSX, images, and text) and enforces file size limits up to 250 MB before staging for encrypted storage.
+                A beginner-friendly 6-step workflow guides you from choosing files (up to 20) or Secret Text, naming your archive, picking Live P2P or Encrypted Cloud Archive, setting download expiry, to generating your Secure ID and blurred QR code.
               </p>
               <div className="sv-pillar-tags">
-                <span>Drag & Drop</span>
-                <span>Format Validation</span>
-                <span>250MB Limit</span>
+                <span>6-Step Wizard</span>
+                <span>Up to 20 Files</span>
+                <span>Secret Text</span>
               </div>
             </div>
           </div>
@@ -664,15 +668,15 @@ export default function Welcome({ currentUser }) {
             <div className="sv-pillar-content">
               <div className="sv-pillar-header">
                 <Share2 size={22} className="text-[#E11D2E]" />
-                <h3>Controlled Document Sharing</h3>
+                <h3>Live P2P, Secure ID &amp; QR Scanner</h3>
               </div>
               <p>
-                Users can share selected documents with authorized people using high-entropy access codes. Custom access permissions, expiration times (1 hour to 30 days), and download caps prevent unauthorized forwarding.
+                Share directly browser-to-browser with a single Unified Secure ID (DQV1-...) and privacy-blurred QR code that reveals only when you click Show QR. Recipients can paste the code or scan with the built-in Unlock QR Scanner.
               </p>
               <div className="sv-pillar-tags">
-                <span>10-Char Access Codes</span>
-                <span>Auto-Destruct Timers</span>
-                <span>Download Limits</span>
+                <span>Unified Secure ID</span>
+                <span>Blurred QR</span>
+                <span>In-Browser Scanner</span>
               </div>
             </div>
           </div>
@@ -1037,7 +1041,19 @@ export default function Welcome({ currentUser }) {
                 </div>
                 <div className="sv-check-item">
                   <CheckCircle size={16} className="text-[#E11D2E]" />
-                  <span>Real-time fulfillment tracking & cryptographic access logging</span>
+                  <span>WebRTC Live P2P with Argon2id + AES-256-GCM encryption</span>
+                </div>
+                <div className="sv-check-item">
+                  <CheckCircle size={16} className="text-[#E11D2E]" />
+                  <span>Unified Secure ID &amp; privacy-blurred QR codes (Show QR to reveal)</span>
+                </div>
+                <div className="sv-check-item">
+                  <CheckCircle size={16} className="text-[#E11D2E]" />
+                  <span>Local in-browser QR Scanner (zero video sent to server)</span>
+                </div>
+                <div className="sv-check-item">
+                  <CheckCircle size={16} className="text-[#E11D2E]" />
+                  <span>Real-time fulfillment tracking &amp; SHA-256 integrity verification</span>
                 </div>
               </div>
             </div>

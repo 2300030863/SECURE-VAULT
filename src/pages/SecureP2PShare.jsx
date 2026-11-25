@@ -27,7 +27,11 @@ import {
   Sparkles,
 } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import BlurredQrCard from '../components/sharing/BlurredQrCard';
+import UnlockQrScannerModal from '../components/sharing/UnlockQrScannerModal';
 import { P2PSenderSession, P2PReceiverSession } from '../services/p2pSocketWebRtcService';
+import { extractSecureIdFromHash } from '../utils/qrCodeParser';
+import { isSecureIdFormat } from '../services/p2pCryptoService';
 
 function formatBytes(bytes = 0) {
   if (!bytes || bytes <= 0) return '0 B';
@@ -68,6 +72,7 @@ export default function SecureP2PShare() {
   const senderRef = useRef(null);
   const [senderState, setSenderState] = useState({
     status: 'IDLE',
+    secureId: '',
     transferId: '',
     unlockSecret: '',
     expiresAt: null,
@@ -80,7 +85,6 @@ export default function SecureP2PShare() {
     completedCount: 0,
   });
   const [senderProgress, setSenderProgress] = useState(null);
-  const [showSecret, setShowSecret] = useState(false);
   const [showQr, setShowQr] = useState(true);
   const [copiedField, setCopiedField] = useState('');
   const [confirmStopOpen, setConfirmStopOpen] = useState(false);
@@ -89,9 +93,12 @@ export default function SecureP2PShare() {
 
   // Receiver join & session state
   const receiverRef = useRef(null);
+  const [joinSecureId, setJoinSecureId] = useState('');
+  const [useLegacyTwoCode, setUseLegacyTwoCode] = useState(false);
   const [joinTransferId, setJoinTransferId] = useState('');
   const [joinUnlockSecret, setJoinUnlockSecret] = useState('');
   const [showJoinSecret, setShowJoinSecret] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
   const [receiverState, setReceiverState] = useState({
     status: 'IDLE',
     transferId: '',
@@ -216,13 +223,48 @@ export default function SecureP2PShare() {
     setSenderNotice({ type: 'warning', message: 'Sharing stopped. Active transfers were terminated.' });
   };
 
-  const handleJoinSession = async (e) => {
-    e.preventDefault();
+  const connectReceiver = async ({ secureId, transferId, unlockSecret }) => {
     setReceiverError('');
     setReceiverNotice(null);
     setReceiverProgress(null);
 
-    if (!joinTransferId.trim() || !joinUnlockSecret.trim()) {
+    const trimmedSecure = (secureId || '').trim();
+    if (!useLegacyTwoCode || trimmedSecure) {
+      const candidate = trimmedSecure || joinSecureId.trim();
+      if (!candidate) {
+        setReceiverError('Please enter a Secure ID.');
+        return;
+      }
+      setIsJoining(true);
+      try {
+        const receiver = new P2PReceiverSession({
+          onStateChange: (patch) => {
+            setReceiverState((prev) => ({ ...prev, ...patch }));
+          },
+          onProgress: (prog) => {
+            setReceiverProgress(prog);
+          },
+          onNotification: (note) => {
+            setReceiverNotice(note);
+          },
+          onError: (errMsg) => {
+            setReceiverError(errMsg);
+          },
+        });
+        receiverRef.current = receiver;
+        await receiver.joinSession({ secureId: candidate });
+        setViewMode('receiver');
+      } catch (err) {
+        setReceiverError(err.message || 'Unable to join secure share.');
+      } finally {
+        setIsJoining(false);
+      }
+      return;
+    }
+
+    const cleanTid = (transferId ?? joinTransferId).trim();
+    const cleanSecret = (unlockSecret ?? joinUnlockSecret).trim();
+    if (!cleanTid || !cleanSecret) {
       setReceiverError('Please enter both the Transfer ID and the Secret Unlock Code.');
       return;
     }
@@ -245,8 +287,8 @@ export default function SecureP2PShare() {
       });
       receiverRef.current = receiver;
       await receiver.joinSession({
-        transferId: joinTransferId,
-        unlockSecret: joinUnlockSecret,
+        transferId: cleanTid,
+        unlockSecret: cleanSecret,
       });
       setViewMode('receiver');
     } catch (err) {
@@ -255,6 +297,45 @@ export default function SecureP2PShare() {
       setIsJoining(false);
     }
   };
+
+  const handleJoinSession = async (e) => {
+    e.preventDefault();
+    await connectReceiver({
+      secureId: useLegacyTwoCode ? '' : joinSecureId,
+      transferId: joinTransferId,
+      unlockSecret: joinUnlockSecret,
+    });
+  };
+
+  const handleQrScanSuccess = async (parsed) => {
+    setShowQrScanner(false);
+    if (!parsed?.ok) return;
+    if (parsed.isSecureId && parsed.secureId) {
+      setUseLegacyTwoCode(false);
+      setJoinSecureId(parsed.secureId);
+      await connectReceiver({ secureId: parsed.secureId });
+      return;
+    }
+    if (parsed.code) {
+      setUseLegacyTwoCode(true);
+      setJoinTransferId(parsed.code);
+      if (parsed.unlockSecret) {
+        setJoinUnlockSecret(parsed.unlockSecret);
+        await connectReceiver({ transferId: parsed.code, unlockSecret: parsed.unlockSecret });
+      }
+    }
+  };
+
+  useEffect(() => {
+    const hashSecureId = extractSecureIdFromHash(window.location.hash);
+    if (hashSecureId) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      setUseLegacyTwoCode(false);
+      setJoinSecureId(hashSecureId);
+      connectReceiver({ secureId: hashSecureId });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleResetToHub = () => {
     senderRef.current?.stopSharing();
@@ -474,43 +555,106 @@ export default function SecureP2PShare() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-white">Receive Files</h2>
-                  <p className="text-xs text-zinc-400">Enter the Transfer ID and Secret Unlock Code from sender</p>
+                  <p className="text-xs text-zinc-400">
+                    {useLegacyTwoCode
+                      ? 'Enter the legacy Transfer ID and Secret Unlock Code from sender'
+                      : 'Enter or scan the Secure ID from the sender'}
+                  </p>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Transfer ID</label>
-                <input
-                  type="text"
-                  placeholder="e.g. DQV-XXXX-XXXX-XXXX"
-                  value={joinTransferId}
-                  onChange={(e) => setJoinTransferId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0B0B0D] border border-zinc-700 text-white text-sm font-mono focus:outline-none focus:border-[#E11D2E]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Secret Unlock Code</label>
-                <div className="relative">
-                  <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showJoinSecret ? 'text' : 'password'}
-                    placeholder="Enter sender's secret unlock code"
-                    value={joinUnlockSecret}
-                    onChange={(e) => setJoinUnlockSecret(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#0B0B0D] border border-zinc-700 text-white text-sm font-mono focus:outline-none focus:border-[#E11D2E]"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowJoinSecret(!showJoinSecret)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white cursor-pointer"
-                    aria-label={showJoinSecret ? 'Hide unlock code' : 'Show unlock code'}
-                  >
-                    {showJoinSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+              {!useLegacyTwoCode ? (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Enter Secure ID</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="DQV1-..."
+                      value={joinSecureId}
+                      onChange={(e) => {
+                        setJoinSecureId(e.target.value.trim());
+                        setReceiverError('');
+                      }}
+                      className="w-full px-3.5 py-2.5 pr-36 rounded-xl bg-[#0B0B0D] border border-zinc-700 text-white text-xs sm:text-sm font-mono focus:outline-none focus:border-[#E11D2E]"
+                      required
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowQrScanner(true)}
+                        className="px-2 py-1 text-[11px] font-semibold text-red-200 hover:text-white bg-red-950/60 hover:bg-[#E11D2E] border border-[#E11D2E]/50 rounded-lg flex items-center gap-1 cursor-pointer"
+                      >
+                        <QrCode className="w-3 h-3" />
+                        <span>Scan QR</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const text = await navigator.clipboard.readText();
+                            if (text) {
+                              setJoinSecureId(text.trim());
+                              setReceiverError('');
+                            }
+                          } catch {}
+                        }}
+                        className="px-2 py-1 text-[11px] font-mono text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer"
+                      >
+                        Paste
+                      </button>
+                    </div>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Transfer ID</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. DQV-XXXX-XXXX-XXXX"
+                      value={joinTransferId}
+                      onChange={(e) => setJoinTransferId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#0B0B0D] border border-zinc-700 text-white text-sm font-mono focus:outline-none focus:border-[#E11D2E]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Secret Unlock Code</label>
+                    <div className="relative">
+                      <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type={showJoinSecret ? 'text' : 'password'}
+                        placeholder="Enter sender's secret unlock code"
+                        value={joinUnlockSecret}
+                        onChange={(e) => setJoinUnlockSecret(e.target.value)}
+                        className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#0B0B0D] border border-zinc-700 text-white text-sm font-mono focus:outline-none focus:border-[#E11D2E]"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowJoinSecret(!showJoinSecret)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white cursor-pointer"
+                        aria-label={showJoinSecret ? 'Hide unlock code' : 'Show unlock code'}
+                      >
+                        {showJoinSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div className="flex items-center justify-between text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseLegacyTwoCode((v) => !v);
+                    setReceiverError('');
+                  }}
+                  className="text-zinc-400 hover:text-white underline cursor-pointer"
+                >
+                  {useLegacyTwoCode ? 'Use single Secure ID instead' : 'Have legacy 2-part Transfer ID + Unlock Code?'}
+                </button>
               </div>
 
               <div className="p-3.5 rounded-xl bg-[#0B0B0D] border border-zinc-800 text-xs text-zinc-400 space-y-1.5">
@@ -519,7 +663,7 @@ export default function SecureP2PShare() {
                   <span>Zero-Knowledge Verification</span>
                 </div>
                 <p>
-                  Your unlock code is never sent to our backend. It derives the AES-256-GCM decryption key inside your browser after the sender approves your connection.
+                  The secret component of your Secure ID never leaves your browser. It derives the AES-256-GCM decryption key locally after sender approval.
                 </p>
               </div>
 
@@ -536,9 +680,16 @@ export default function SecureP2PShare() {
                 className="sv-btn-primary w-full py-3 flex items-center justify-center gap-2 text-sm font-bold disabled:opacity-50"
               >
                 <Download className="w-4 h-4" />
-                <span>{isJoining ? 'Connecting to Session...' : 'Join Secure Share'}</span>
+                <span>{isJoining ? 'Connecting to Session...' : 'Connect & Unlock'}</span>
               </button>
             </form>
+
+            <UnlockQrScannerModal
+              isOpen={showQrScanner}
+              onClose={() => setShowQrScanner(false)}
+              onScanSuccess={handleQrScanSuccess}
+              onFallbackManual={() => setShowQrScanner(false)}
+            />
           </GlassCard>
         </div>
       )}
@@ -624,82 +775,46 @@ export default function SecureP2PShare() {
               </div>
             )}
 
-            {/* Credentials + QR Grid */}
+            {/* Unified SECURE ID + QR Grid */}
             {!['EXPIRED', 'CANCELLED'].includes(senderState.status) && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2 space-y-3">
-                  {/* Transfer ID */}
-                  <div className="p-3.5 rounded-xl bg-[#0B0B0D] border border-zinc-800">
-                    <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">
-                      Transfer ID (Public Room Identifier)
+                <div className="md:col-span-2 flex flex-col justify-center">
+                  <div className="p-4 rounded-xl bg-[#0B0B0D] border border-zinc-800 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] uppercase tracking-wider font-semibold text-zinc-400">
+                        SECURE ID
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-950/60 border border-[#E11D2E]/40 text-red-300 font-medium">
+                        E2EE Key Embedded · Zero Server Secrets
+                      </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <code className="text-sm sm:text-base font-bold text-white font-mono break-all">
-                        {senderState.transferId}
+                      <code className="text-xs sm:text-sm font-bold text-white font-mono break-all select-all">
+                        {senderState.secureId || senderState.transferId}
                       </code>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(senderState.transferId, 'id')}
-                        className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 flex items-center gap-1 shrink-0 cursor-pointer"
+                        onClick={() => copyToClipboard(senderState.secureId || senderState.transferId, 'secureId')}
+                        className="px-3 py-1.5 rounded-lg bg-[#E11D2E] hover:bg-[#FF2E44] text-xs font-semibold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
                       >
-                        {copiedField === 'id' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedField === 'id' ? 'Copied' : 'Copy'}</span>
+                        {copiedField === 'secureId' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedField === 'secureId' ? 'Copied' : 'Copy'}</span>
                       </button>
                     </div>
-                  </div>
-
-                  {/* Secret Unlock Code */}
-                  <div className="p-3.5 rounded-xl bg-[#0B0B0D] border border-zinc-800">
-                    <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">
-                      Secret Unlock Code (End-to-End Key — Never Sent to Server)
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <code className="text-xs sm:text-sm font-bold text-amber-300 font-mono break-all">
-                        {showSecret ? senderState.unlockSecret : '•••••-•••••-•••••-•••••-•••••-•••••'}
-                      </code>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setShowSecret(!showSecret)}
-                          className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer"
-                          title={showSecret ? 'Hide code' : 'Reveal code'}
-                        >
-                          {showSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(senderState.unlockSecret, 'secret')}
-                          className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 flex items-center gap-1 cursor-pointer"
-                        >
-                          {copiedField === 'secret' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedField === 'secret' ? 'Copied' : 'Copy'}</span>
-                        </button>
-                      </div>
-                    </div>
+                    <p className="text-[11px] text-zinc-500">
+                      Share this single Secure ID or let the recipient scan the QR code to connect and decrypt.
+                    </p>
                   </div>
                 </div>
 
-                {/* QR Code Card */}
-                <div className="p-3.5 rounded-xl bg-[#0B0B0D] border border-zinc-800 flex flex-col items-center justify-center text-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowQr(!showQr)}
-                    className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 mb-2 cursor-pointer"
-                  >
-                    <QrCode className="w-3.5 h-3.5 text-[#E11D2E]" />
-                    <span>{showQr ? 'Hide QR Code' : 'Show QR Code'}</span>
-                  </button>
-                  {showQr && senderState.transferId && (
-                    <div className="p-2 bg-white rounded-lg">
-                      <QRCodeSVG
-                        value={`${window.location.origin}/vault?code=${encodeURIComponent(senderState.transferId)}`}
-                        size={112}
-                        level="M"
-                      />
-                    </div>
-                  )}
-                  <span className="text-[10px] text-zinc-500 mt-1.5">Connection details QR</span>
-                </div>
+                {/* QR Code Card (Blurred until Show QR clicked) */}
+                <BlurredQrCard
+                  value={`${window.location.origin}/p2p-share#id=${encodeURIComponent(senderState.secureId || senderState.transferId)}`}
+                  size={112}
+                  title="Secure QR Code"
+                  subtitle="Scan to connect & unlock"
+                  className="bg-[#0B0B0D]"
+                />
               </div>
             )}
 
@@ -744,7 +859,7 @@ export default function SecureP2PShare() {
               </h3>
               {(!senderState.recipients || senderState.recipients.length === 0) ? (
                 <div className="p-4 rounded-xl bg-[#0B0B0D] border border-zinc-800 text-xs text-zinc-400 text-center">
-                  Waiting for recipient to enter Transfer ID and request access...
+                  Waiting for recipient to enter Secure ID and request access...
                 </div>
               ) : (
                 senderState.recipients.map((r) => (

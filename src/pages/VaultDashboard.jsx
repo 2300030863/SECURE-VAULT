@@ -63,7 +63,10 @@ import MySharedDocuments from '../components/sharing/MySharedDocuments';
 import AiDocumentModal from '../components/ai/AiDocumentModal';
 import SupportedFormatsModal from '../components/SupportedFormatsModal';
 import OnlineLiveShare from '../components/sharing/OnlineLiveShare';
+import BlurredQrCard from '../components/sharing/BlurredQrCard';
 import UnlockQrScannerModal from '../components/sharing/UnlockQrScannerModal';
+import { extractSecureIdFromHash } from '../utils/qrCodeParser';
+import { isSecureIdFormat } from '../services/p2pCryptoService';
 import { WebRtcShareSession, formatFileSize } from '../services/webRtcShareService';
 import { P2PSenderSession, P2PReceiverSession } from '../services/p2pSocketWebRtcService';
 import JSZip from 'jszip';
@@ -115,6 +118,9 @@ export default function VaultDashboard({ currentUser }) {
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
 
   // Upload & Storage Mode State
+  const [wizardStep, setWizardStep] = useState(1); // 1..7 guided wizard
+  const [hasSelectedEntryMode, setHasSelectedEntryMode] = useState(false);
+  const [showFormatsGuide, setShowFormatsGuide] = useState(false);
   const [entryMode, setEntryMode] = useState('file'); // 'file' | 'text'
   const [storageMode, setStorageMode] = useState(''); // '' (unselected) | 'online' | 'temporary' | 'long_term'
   const [maxDownloads, setMaxDownloads] = useState(5); // 1 | 5 | 10 | 'unlimited'
@@ -186,6 +192,21 @@ export default function VaultDashboard({ currentUser }) {
     setActiveLiveSession(null);
     setLiveShareProgress(null);
     setLiveShareStatusMessage('');
+    setWizardStep(1);
+  };
+
+  const handleResetWizard = () => {
+    setUploadResult(null);
+    setUploadError('');
+    setUploadProgress(0);
+    setSelectedFiles([]);
+    setDocumentName('');
+    setTextContent('');
+    setTextTitle('');
+    setStorageMode('');
+    setHasSelectedEntryMode(false);
+    setWizardStep(1);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Access State
@@ -204,7 +225,10 @@ export default function VaultDashboard({ currentUser }) {
   const [unlockedLiveShareCode, setUnlockedLiveShareCode] = useState(null);
   const [accessError, setAccessError] = useState('');
 
-  const isP2PTransferCode = isSecureP2PUnlock || /^DQV-/i.test(accessCodeInput.trim());
+  const trimmedAccessInput = accessCodeInput.trim();
+  const isUnifiedSecureId = isSecureIdFormat(trimmedAccessInput) || /^DQV1-/i.test(trimmedAccessInput);
+  const isLegacyP2PCode = !isUnifiedSecureId && /^DQV-/i.test(trimmedAccessInput);
+  const isP2PTransferCode = isSecureP2PUnlock || isUnifiedSecureId || isLegacyP2PCode;
 
   const handleResetP2PReceiver = () => {
     p2pReceiverRef.current?.disconnect();
@@ -247,13 +271,23 @@ export default function VaultDashboard({ currentUser }) {
     if (tabFromUrl === 'live-share' || tabFromUrl === 'online-share' || tabFromUrl === 'live' || tabFromUrl === 'online') {
       setActiveTab('upload');
       setEntryMode('file');
+      setHasSelectedEntryMode(true);
       setStorageMode('online');
+      setWizardStep(2);
+    }
+    const hashSecureId = extractSecureIdFromHash(window.location.hash);
+    if (hashSecureId) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      setAccessCodeInput(hashSecureId);
+      setIsSecureP2PUnlock(true);
+      setActiveTab('access');
+      joinSecureP2PByCode(hashSecureId);
     }
     const codeFromUrl = searchParams.get('code') || searchParams.get('c') || searchParams.get('transferId');
     if (codeFromUrl && codeFromUrl.trim()) {
       const trimmed = codeFromUrl.trim();
       setAccessCodeInput(trimmed);
-      if (/^DQV-/i.test(trimmed)) {
+      if (/^DQV1?-/i.test(trimmed)) {
         setIsSecureP2PUnlock(true);
       }
       setActiveTab('access');
@@ -462,24 +496,28 @@ export default function VaultDashboard({ currentUser }) {
   };
 
   const handleUpload = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
+    if (isUploading || isStartingLiveShare) return;
     if (!currentUser) {
       setAuthPromptOpen(true);
       return;
     }
     if (entryMode === 'file' && selectedFiles.length === 0) {
       setUploadError('Please select at least one file to upload.');
+      setWizardStep(2);
       return;
     }
     if (entryMode === 'text' && !textContent.trim()) {
       setUploadError('Please enter text content to secure.');
+      setWizardStep(2);
       return;
     }
     if (!storageMode) {
-      setShowSettingsAccordion(true);
-      setUploadError('Please select a Storage Policy & Access Rules option before continuing.');
+      setUploadError('Please choose a sharing method before continuing.');
+      setWizardStep(4);
       return;
     }
+    setWizardStep(6);
 
     // SECURE P2P ONLINE SHARING (E2EE AES-256-GCM + Argon2id + Socket.IO + WebRTC):
     if (storageMode === 'online' && entryMode === 'file') {
@@ -488,11 +526,17 @@ export default function VaultDashboard({ currentUser }) {
       setLiveShareProgress(null);
 
       let durationSeconds = 900; // 15 minutes default
-      if (expiryOption === '5m') durationSeconds = 300;
-      else if (expiryOption === '10m') durationSeconds = 600;
-      else if (expiryOption === '15m') durationSeconds = 900;
-      else if (expiryOption === '30m') durationSeconds = 1800;
-      else if (expiryOption === '1h') durationSeconds = 3600;
+      if (expiryOption === 'custom') {
+        const val = Math.max(1, parseInt(customDurationValue, 10) || 15);
+        const mult = customDurationUnit === 'h' ? 3600 : customDurationUnit === 'd' ? 86400 : 60;
+        durationSeconds = Math.min(Math.max(val * mult, 60), 86400);
+      } else {
+        const m = String(expiryOption).match(/^(\d+)(m|h)$/i);
+        if (m) {
+          const n = parseInt(m[1], 10);
+          durationSeconds = Math.min(Math.max(n * (m[2].toLowerCase() === 'h' ? 3600 : 60), 60), 86400);
+        }
+      }
 
       const parsedMaxRecipients =
         maxDownloads === 'unlimited' || maxDownloads === null
@@ -714,6 +758,47 @@ export default function VaultDashboard({ currentUser }) {
     }
   };
 
+  const joinSecureP2PByCode = async (codeOrSecureId, secretOverride = '') => {
+    setAccessError('');
+    setUnlockedDoc(null);
+    setUnlockedLiveShareCode(null);
+    setShowInlinePreview(false);
+    p2pReceiverRef.current?.disconnect();
+    setP2pReceiverProgress(null);
+
+    const receiver = new P2PReceiverSession({
+      onStateChange: (patch) => {
+        setP2pReceiverState((prev) => ({ ...(prev || {}), ...patch }));
+      },
+      onProgress: (prog) => {
+        setP2pReceiverProgress(prog);
+      },
+      onNotification: (msg) => {
+        if (msg) setAccessError('');
+      },
+      onError: (errMsg) => {
+        setAccessError(errMsg || 'Secure P2P transfer failed.');
+      },
+    });
+    p2pReceiverRef.current = receiver;
+    setIsVerifying(true);
+    try {
+      const cleaned = (codeOrSecureId || '').trim();
+      if (/^DQV1-/i.test(cleaned) || isSecureIdFormat(cleaned)) {
+        await receiver.joinSession({ secureId: cleaned });
+      } else {
+        await receiver.joinSession({
+          transferId: cleaned.toUpperCase(),
+          unlockSecret: (secretOverride || p2pUnlockSecret).trim(),
+        });
+      }
+    } catch (err) {
+      setAccessError(err.message || 'Failed to connect to Secure P2P session.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   const handleQrScanSuccess = async (parsed) => {
     setShowQrScanner(false);
     if (!parsed?.ok || !parsed.code) return;
@@ -725,8 +810,13 @@ export default function VaultDashboard({ currentUser }) {
 
     if (parsed.isP2P) {
       setIsSecureP2PUnlock(true);
+      if (parsed.isSecureId && parsed.secureId) {
+        await joinSecureP2PByCode(parsed.secureId);
+        return;
+      }
       if (parsed.unlockSecret) {
         setP2pUnlockSecret(parsed.unlockSecret);
+        await joinSecureP2PByCode(parsed.code, parsed.unlockSecret);
       } else {
         setTimeout(() => p2pSecretInputRef.current?.focus(), 60);
       }
@@ -741,49 +831,25 @@ export default function VaultDashboard({ currentUser }) {
     e.preventDefault();
     const trimmedCode = accessCodeInput.trim();
     if (!trimmedCode) {
-      setAccessError(isP2PTransferCode ? 'Please enter a Secure P2P Transfer ID.' : 'Please enter an access code.');
+      setAccessError(isP2PTransferCode ? 'Please enter a Secure ID.' : 'Please enter an access code.');
+      return;
+    }
+
+    if (/^DQV1-/i.test(trimmedCode) || isSecureIdFormat(trimmedCode)) {
+      await joinSecureP2PByCode(trimmedCode);
       return;
     }
 
     if (isSecureP2PUnlock || /^DQV-/i.test(trimmedCode)) {
       if (!p2pUnlockSecret.trim()) {
-        setAccessError('Please enter the Secret Unlock Code to decrypt this Secure P2P transfer.');
+        setAccessError(
+          /^DQV-/i.test(trimmedCode)
+            ? 'Please enter the Secret Unlock Code for this legacy 2-part Transfer ID.'
+            : 'Please enter a valid Secure ID (DQV1-...).'
+        );
         return;
       }
-
-      setAccessError('');
-      setUnlockedDoc(null);
-      setUnlockedLiveShareCode(null);
-      setShowInlinePreview(false);
-      p2pReceiverRef.current?.disconnect();
-      setP2pReceiverProgress(null);
-
-      const receiver = new P2PReceiverSession({
-        onStateChange: (patch) => {
-          setP2pReceiverState((prev) => ({ ...(prev || {}), ...patch }));
-        },
-        onProgress: (prog) => {
-          setP2pReceiverProgress(prog);
-        },
-        onNotification: (msg) => {
-          if (msg) setAccessError('');
-        },
-        onError: (errMsg) => {
-          setAccessError(errMsg || 'Secure P2P transfer failed.');
-        },
-      });
-      p2pReceiverRef.current = receiver;
-      setIsVerifying(true);
-      try {
-        await receiver.joinSession({
-          transferId: trimmedCode.toUpperCase(),
-          unlockSecret: p2pUnlockSecret.trim(),
-        });
-      } catch (err) {
-        setAccessError(err.message || 'Failed to connect to Secure P2P session.');
-      } finally {
-        setIsVerifying(false);
-      }
+      await joinSecureP2PByCode(trimmedCode, p2pUnlockSecret.trim());
       return;
     }
 
@@ -1085,40 +1151,74 @@ export default function VaultDashboard({ currentUser }) {
               </div>
             </div>
 
-            {/* Sub-Mode Switcher Under Send & Share (Only Attach Files & Secret Text) */}
-            <div className="flex items-center p-1 bg-zinc-950/80 rounded-xl border border-zinc-800 mb-6 max-w-sm">
-              <button
-                type="button"
-                onClick={() => {
-                  setEntryMode('file');
-                  setUploadError('');
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  entryMode === 'file'
-                    ? 'bg-zinc-900 text-white border border-zinc-700 shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <Paperclip className={`w-3.5 h-3.5 ${entryMode === 'file' ? 'text-[#E11D2E]' : 'text-zinc-500'}`} />
-                <span className="truncate">Attach Files</span>
-              </button>
+            {/* Guided 6-Step Progress Header */}
+            {(() => {
+              const stepMeta = {
+                1: { short: 'Content', title: 'Choose Sharing Content', desc: 'Select whether you want to share files or a confidential text note.' },
+                2: {
+                  short: 'Input',
+                  title: entryMode === 'file' ? 'Select Files' : 'Enter Secret Text',
+                  desc:
+                    entryMode === 'file'
+                      ? 'Add up to 20 files via drag & drop or file picker.'
+                      : 'Write or paste the confidential text you want to protect.',
+                },
+                3: { short: 'Name', title: 'Name Your Archive', desc: 'What would you like to name your archive? (Optional)' },
+                4: { short: 'Policy', title: 'Storage Policy & Access Rules', desc: 'Choose Live P2P or Encrypted Cloud Archive and configure access limits.' },
+                5: { short: 'Time', title: 'Set Time for All Downloads', desc: 'Choose how long recipients are allowed to access and download this share.' },
+                6: { short: 'Generate', title: 'Generate Access Code', desc: 'Confirm to encrypt and generate your Secure ID or access code.' },
+              };
+              const currentMeta = stepMeta[wizardStep] || stepMeta[1];
+              return (
+                <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#141418] via-[#0F0F12] to-[#0B0B0D] border border-zinc-800/90 shadow-lg shadow-black/40 space-y-4">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-red-950/70 border border-[#E11D2E]/50 text-red-200 shadow-sm shadow-red-950/30">
+                        Step {wizardStep} of 6
+                      </span>
+                      <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">{currentMeta.title}</h3>
+                    </div>
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setEntryMode('text');
-                  setUploadError('');
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  entryMode === 'text'
-                    ? 'bg-zinc-900 text-white border border-zinc-700 shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <AlignLeft className={`w-3.5 h-3.5 ${entryMode === 'text' ? 'text-[#E11D2E]' : 'text-zinc-500'}`} />
-                <span className="truncate">Secret Text</span>
-              </button>
-            </div>
+                  {/* Connected Numbered Stepper */}
+                  <div className="relative flex items-center justify-between gap-1 pt-1">
+                    <div className="absolute left-3 right-3 top-[17px] h-0.5 bg-zinc-800/90 -z-0" />
+                    <div
+                      className="absolute left-3 top-[17px] h-0.5 bg-gradient-to-r from-[#E11D2E] to-red-400 transition-all duration-300 -z-0"
+                      style={{ width: `calc(${((wizardStep - 1) / 5) * 100}% - 12px)` }}
+                    />
+                    {[1, 2, 3, 4, 5, 6].map((s) => {
+                      const isDone = s < wizardStep;
+                      const isActive = s === wizardStep;
+                      return (
+                        <div key={s} className="relative z-10 flex flex-col items-center gap-1.5">
+                          <div
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold border transition-all duration-200 ${
+                              isDone
+                                ? 'bg-[#E11D2E] border-[#E11D2E] text-white shadow-md shadow-red-950/40'
+                                : isActive
+                                ? 'bg-[#18181B] border-[#E11D2E] text-white ring-4 ring-[#E11D2E]/20 shadow-md shadow-red-950/40'
+                                : 'bg-[#121215] border-zinc-800 text-zinc-500'
+                            }`}
+                          >
+                            {isDone ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : s}
+                          </div>
+                          <span
+                            className={`hidden sm:block text-[10px] font-medium ${
+                              isActive ? 'text-white' : isDone ? 'text-zinc-300' : 'text-zinc-500'
+                            }`}
+                          >
+                            {stepMeta[s].short}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-xs text-zinc-400 leading-relaxed">{currentMeta.desc}</p>
+                </div>
+              );
+            })()}
 
             {/* If a Secure P2P Session is currently active, render the Secure P2P Sender Dashboard */}
             {activeLiveSession ? (
@@ -1189,85 +1289,48 @@ export default function VaultDashboard({ currentUser }) {
                   </div>
                 )}
 
-                {/* Transfer ID, Secret Unlock Code & QR Code */}
+                {/* Unified SECURE ID & QR Code */}
                 {!['EXPIRED', 'CANCELLED'].includes(activeLiveSession.status) && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="md:col-span-2 space-y-3">
-                      <div className="p-3.5 rounded-xl bg-[#121215] border border-zinc-800">
-                        <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">
-                          Transfer ID (Public Room Identifier)
+                    <div className="md:col-span-2 flex flex-col justify-center">
+                      <div className="p-4 rounded-xl bg-[#121215] border border-zinc-800 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-[11px] uppercase tracking-wider font-semibold text-zinc-400">
+                            SECURE ID
+                          </div>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-950/60 border border-[#E11D2E]/40 text-red-300 font-medium">
+                            E2EE Key Embedded · Zero Server Secrets
+                          </span>
                         </div>
                         <div className="flex items-center justify-between gap-2">
-                          <code className="text-sm sm:text-base font-bold text-white font-mono break-all">
-                            {activeLiveSession.transferId}
+                          <code className="text-xs sm:text-sm font-bold text-white font-mono break-all select-all">
+                            {activeLiveSession.secureId || activeLiveSession.transferId}
                           </code>
                           <button
                             type="button"
                             onClick={() => {
-                              navigator.clipboard.writeText(activeLiveSession.transferId);
+                              navigator.clipboard.writeText(activeLiveSession.secureId || activeLiveSession.transferId);
                               setCopiedLiveCode(true);
                               setTimeout(() => setCopiedLiveCode(false), 2000);
                             }}
-                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 flex items-center gap-1 shrink-0 cursor-pointer"
+                            className="px-3 py-1.5 rounded-lg bg-[#E11D2E] hover:bg-[#FF2E44] text-xs font-semibold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
                           >
-                            {copiedLiveCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedLiveCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copiedLiveCode ? 'Copied' : 'Copy'}</span>
                           </button>
                         </div>
-                      </div>
-
-                      <div className="p-3.5 rounded-xl bg-[#121215] border border-zinc-800">
-                        <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-1">
-                          Secret Unlock Code (E2EE Key — Never Sent to Server)
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <code className="text-xs sm:text-sm font-bold text-amber-300 font-mono break-all">
-                            {showP2PSecret ? activeLiveSession.unlockSecret : '•••••-•••••-•••••-•••••-•••••-•••••'}
-                          </code>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => setShowP2PSecret(!showP2PSecret)}
-                              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer"
-                              title={showP2PSecret ? 'Hide code' : 'Reveal code'}
-                            >
-                              {showP2PSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(activeLiveSession.unlockSecret);
-                                setCopiedLiveSecret(true);
-                                setTimeout(() => setCopiedLiveSecret(false), 2000);
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 flex items-center gap-1 cursor-pointer"
-                            >
-                              {copiedLiveSecret ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                              <span>{copiedLiveSecret ? 'Copied' : 'Copy'}</span>
-                            </button>
-                          </div>
-                        </div>
+                        <p className="text-[11px] text-zinc-500">
+                          Share this single Secure ID or let the recipient scan the QR code to unlock and decrypt.
+                        </p>
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-[#121215] border border-zinc-800 flex flex-col items-center justify-center text-center">
-                      <span className="text-[11px] text-zinc-400 flex items-center gap-1 mb-2">
-                        <QrCode className="w-3.5 h-3.5 text-[#E11D2E]" />
-                        <span>Connection QR</span>
-                      </span>
-                      {activeLiveSession.transferId && (
-                        <>
-                          <div className="p-2 bg-white rounded-lg">
-                            <QRCodeSVG
-                              value={`${window.location.origin}/vault?code=${encodeURIComponent(activeLiveSession.transferId)}`}
-                              size={108}
-                              level="M"
-                            />
-                          </div>
-                          <span className="text-[10px] text-zinc-500 mt-1.5">Scan to open Unlock Code</span>
-                        </>
-                      )}
-                    </div>
+                    <BlurredQrCard
+                      value={`${window.location.origin}/vault#id=${encodeURIComponent(activeLiveSession.secureId || activeLiveSession.transferId)}`}
+                      size={108}
+                      title="Secure QR Code"
+                      subtitle="Scan to connect & unlock"
+                    />
                   </div>
                 )}
 
@@ -1395,307 +1458,440 @@ export default function VaultDashboard({ currentUser }) {
                   </div>
                 )}
 
-            {/* Upload Form */}
-            <form onSubmit={handleUpload} className="space-y-4">
-              {entryMode === 'file' ? (
-                <div className="space-y-3">
-                  <div
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`vault-dropzone ${selectedFiles.length > 0 ? 'has-files' : ''}`}
-                  >
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileSelect}
-                      multiple
-                      className="hidden"
-                    />
-
-                    {selectedFiles.length === 0 ? (
-                      <div className="space-y-2 py-3">
-                        <div className="w-12 h-12 mx-auto rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-inner">
-                          <UploadCloud className="w-6 h-6 text-[#E11D2E]" />
+            {/* Upload Form (Steps 1–7) */}
+            <form onSubmit={handleUpload} className="space-y-5">
+              {/* STEP 1 – Choose What to Share */}
+              {wizardStep === 1 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEntryMode('file');
+                        setHasSelectedEntryMode(true);
+                        setUploadError('');
+                      }}
+                      className={`group p-5 sm:p-6 rounded-2xl text-left border transition-all duration-200 cursor-pointer space-y-3.5 hover:-translate-y-0.5 ${
+                        hasSelectedEntryMode && entryMode === 'file'
+                          ? 'bg-gradient-to-br from-red-950/35 via-[#151519] to-[#0E0E11] border-[#E11D2E] ring-1 ring-[#E11D2E]/40 shadow-xl shadow-red-950/25'
+                          : 'bg-[#101014]/90 border-zinc-800/90 hover:border-zinc-700 hover:bg-[#141419]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="w-12 h-12 rounded-xl bg-zinc-900/90 border border-zinc-800 group-hover:border-[#E11D2E]/40 flex items-center justify-center text-[#E11D2E] shadow-inner transition-colors">
+                          <Paperclip className="w-5 h-5" />
                         </div>
-                        <div>
-                          <span className="text-sm font-semibold text-[#E11D2E] hover:underline">
-                            Choose Files
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
+                            Up to 20 files
                           </span>
-                          <span className="text-sm text-zinc-300"> or drag & drop here</span>
+                          {hasSelectedEntryMode && entryMode === 'file' && (
+                            <span className="w-6 h-6 rounded-full bg-[#E11D2E] text-white flex items-center justify-center shadow-md shadow-red-950/40">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs text-zinc-400">
-                          Supports PDF, Word, Excel, Images, Audio, Code, and Archives (Up to 20 files)
+                      </div>
+                      <div>
+                        <div className="text-sm sm:text-base font-bold text-white">Attach Files</div>
+                        <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                          Share PDFs, documents, images, audio, code, or ZIP archives with end-to-end encryption.
                         </p>
-                        <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-950/40 border border-red-800/40 text-red-300 text-[10px] font-medium">
-                            👁️ Vision OCR
-                          </span>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 text-[10px] font-medium">
-                            🎙️ Whisper Audio
-                          </span>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/40 border border-amber-800/40 text-amber-300 text-[10px] font-medium">
-                            📦 ZIP Deep Scan
-                          </span>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/40 border border-emerald-800/40 text-emerald-300 text-[10px] font-medium">
-                            📊 Excel Tables
-                          </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEntryMode('text');
+                        setHasSelectedEntryMode(true);
+                        setUploadError('');
+                      }}
+                      className={`group p-5 sm:p-6 rounded-2xl text-left border transition-all duration-200 cursor-pointer space-y-3.5 hover:-translate-y-0.5 ${
+                        hasSelectedEntryMode && entryMode === 'text'
+                          ? 'bg-gradient-to-br from-red-950/35 via-[#151519] to-[#0E0E11] border-[#E11D2E] ring-1 ring-[#E11D2E]/40 shadow-xl shadow-red-950/25'
+                          : 'bg-[#101014]/90 border-zinc-800/90 hover:border-zinc-700 hover:bg-[#141419]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="w-12 h-12 rounded-xl bg-zinc-900/90 border border-zinc-800 group-hover:border-[#E11D2E]/40 flex items-center justify-center text-[#E11D2E] shadow-inner transition-colors">
+                          <AlignLeft className="w-5 h-5" />
                         </div>
-                        <div className="pt-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
+                            Encrypted Note
+                          </span>
+                          {hasSelectedEntryMode && entryMode === 'text' && (
+                            <span className="w-6 h-6 rounded-full bg-[#E11D2E] text-white flex items-center justify-center shadow-md shadow-red-950/40">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm sm:text-base font-bold text-white">Secret Text</div>
+                        <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                          Encrypt confidential notes, passwords, API keys, or private snippets with zero plaintext exposure.
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+
+                  {uploadError && (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-300">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-[#E11D2E]" />
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
+
+                  {hasSelectedEntryMode && (
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadError('');
+                          setWizardStep(2);
+                        }}
+                        className="px-6 py-2.5 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-red-950/30 cursor-pointer"
+                      >
+                        <span>Continue</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 2 – Select Files or Enter Secret Text */}
+              {wizardStep === 2 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  {entryMode === 'file' ? (
+                    <div className="space-y-3">
+                      <div
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={handleDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`vault-dropzone ${selectedFiles.length > 0 ? 'has-files' : ''}`}
+                      >
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileSelect}
+                          multiple
+                          className="hidden"
+                        />
+
+                        {selectedFiles.length === 0 ? (
+                          <div className="space-y-2 py-3">
+                            <div className="w-12 h-12 mx-auto rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-inner">
+                              <UploadCloud className="w-6 h-6 text-[#E11D2E]" />
+                            </div>
+                            <div>
+                              <span className="text-sm font-semibold text-[#E11D2E] hover:underline">
+                                Choose Files
+                              </span>
+                              <span className="text-sm text-zinc-300"> or drag & drop here</span>
+                            </div>
+                            <p className="text-xs text-zinc-400">
+                              Supports PDF, Word, Excel, Images, Audio, Code, and Archives (Up to 20 files)
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-0.5 rounded-full bg-red-950/70 border border-[#E11D2E]/40 text-[#E11D2E] text-xs font-bold">
+                                  {selectedFiles.length} {selectedFiles.length === 1 ? 'file' : 'files'}
+                                </span>
+                                <span className="text-xs text-zinc-400 font-mono">
+                                  Total: {formatBytes(selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0))}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => fileInputRef.current?.click()}
+                                  className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-medium flex items-center gap-1 transition-all cursor-pointer"
+                                >
+                                  <Plus className="w-3 h-3 text-[#E11D2E]" />
+                                  <span>Add</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleClearFiles}
+                                  className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-red-950/40 border border-zinc-800 hover:border-red-900/50 text-zinc-400 hover:text-red-400 text-xs transition-all cursor-pointer"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1 text-left">
+                              {selectedFiles.map((file, idx) => (
+                                <div
+                                  key={`${file.name}-${idx}`}
+                                  className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-all text-xs"
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                    <div className="p-1.5 rounded-lg bg-[#121215] shrink-0 border border-zinc-800">
+                                      {getFileIcon(file.name, file.type)}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-white font-medium truncate" title={file.name}>
+                                        {file.name}
+                                      </div>
+                                      <div className="text-zinc-500 text-[11px] font-mono">
+                                        {formatBytes(file.size)} • {file.type || (file.name.includes('.') ? file.name.split('.').pop().toUpperCase() : 'File')}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveFile(idx)}
+                                    className="text-zinc-500 hover:text-red-400 p-1 rounded-lg hover:bg-zinc-800 transition-all shrink-0 cursor-pointer"
+                                    title="Remove file"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Collapsible Supported Formats & AI Capabilities Guide */}
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setShowFormatsGuide((v) => !v)}
+                          className="w-full flex items-center justify-between px-3.5 py-2.5 text-xs text-zinc-300 hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                        >
+                          <span className="flex items-center gap-2 font-medium">
+                            <HelpCircle className="w-3.5 h-3.5 text-[#E11D2E]" />
+                            <span>Supported Formats &amp; AI Capabilities</span>
+                          </span>
+                          {showFormatsGuide ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
+                        </button>
+                        {showFormatsGuide && (
+                          <div className="px-3.5 pb-3 pt-1 border-t border-zinc-800/80 space-y-2 text-xs text-zinc-400">
+                            <div className="flex flex-wrap gap-1.5">
+                              <span className="px-2 py-0.5 rounded-full bg-red-950/40 border border-red-800/40 text-red-300 text-[10px]">Vision OCR</span>
+                              <span className="px-2 py-0.5 rounded-full bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 text-[10px]">Whisper Audio</span>
+                              <span className="px-2 py-0.5 rounded-full bg-amber-950/40 border border-amber-800/40 text-amber-300 text-[10px]">ZIP Deep Scan</span>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-950/40 border border-emerald-800/40 text-emerald-300 text-[10px]">Excel Tables</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowFormatsModal(true)}
+                              className="text-[11px] text-[#E11D2E] hover:underline font-medium cursor-pointer"
+                            >
+                              Open Full Supported Formats Guide →
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 bg-zinc-950/60 p-4 rounded-xl border border-zinc-800">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-zinc-300">
+                          Confidential Content <span className="text-[#E11D2E]">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const clip = await navigator.clipboard.readText();
+                              if (clip) {
+                                setTextContent((prev) => (prev ? prev + '\n' + clip : clip));
+                                setUploadError('');
+                              }
+                            } catch {}
+                          }}
+                          className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1 bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-800 transition-all cursor-pointer"
+                        >
+                          <Clipboard className="w-3 h-3 text-[#E11D2E]" /> Paste
+                        </button>
+                      </div>
+
+                      <textarea
+                        rows={6}
+                        value={textContent}
+                        onChange={(e) => {
+                          setTextContent(e.target.value);
+                          setUploadError('');
+                        }}
+                        placeholder="Type or paste confidential notes, passwords, private keys, or code snippets here..."
+                        className="w-full rounded-xl p-3 text-xs text-zinc-100 font-mono placeholder:text-zinc-600 focus:outline-none transition-all resize-y min-h-[140px]"
+                      />
+
+                      <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                        <span>{textContent.length} characters</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-zinc-600">Templates:</span>
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowFormatsModal(true);
+                            onClick={() => {
+                              setTextTitle('API_Secrets');
+                              setTextContent('API_KEY=sk_live_9942a78fbc31...\nDATABASE_URL=mysql://user:pass@gateway:4000/secure_vault');
+                              setUploadError('');
                             }}
-                            className="inline-flex items-center gap-1.5 text-[11px] text-[#E11D2E] hover:text-[#FF2E44] hover:underline font-medium transition-all cursor-pointer"
+                            className="px-2 py-0.5 rounded bg-zinc-900 hover:text-white border border-zinc-800 text-[10px] transition-all cursor-pointer"
                           >
-                            <HelpCircle className="w-3.5 h-3.5" />
-                            <span>Supported Formats & AI Capabilities Guide</span>
+                            API Keys
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTextTitle('Confidential_Note');
+                              setTextContent('CONFIDENTIAL NOTE:\nThis message is encrypted with DocQevrilo.\nAccess code will expire per configuration.');
+                              setUploadError('');
+                            }}
+                            className="px-2 py-0.5 rounded bg-zinc-900 hover:text-white border border-zinc-800 text-[10px] transition-all cursor-pointer"
+                          >
+                            Note
                           </button>
                         </div>
                       </div>
-                    ) : (
-                      <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-0.5 rounded-full bg-red-950/70 border border-[#E11D2E]/40 text-[#E11D2E] text-xs font-bold">
-                              📦 {selectedFiles.length} {selectedFiles.length === 1 ? 'file' : 'files'}
-                            </span>
-                            <span className="text-xs text-zinc-400 font-mono">
-                              Total: {formatBytes(selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0))}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => fileInputRef.current?.click()}
-                              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-medium flex items-center gap-1 transition-all cursor-pointer"
-                            >
-                              <Plus className="w-3 h-3 text-[#E11D2E]" />
-                              <span>Add</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleClearFiles}
-                              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-red-950/40 border border-zinc-800 hover:border-red-900/50 text-zinc-400 hover:text-red-400 text-xs transition-all cursor-pointer"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Selected files list */}
-                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 text-left">
-                          {selectedFiles.map((file, idx) => (
-                            <div
-                              key={`${file.name}-${idx}`}
-                              className="flex items-center justify-between p-2 rounded-xl bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-all text-xs"
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <div className="p-1.5 rounded-lg bg-[#121215] shrink-0 border border-zinc-800">
-                                  {getFileIcon(file.name, file.type)}
-                                </div>
-                                <span className="text-white font-medium truncate max-w-[220px]" title={file.name}>
-                                  {file.name}
-                                </span>
-                                <span className="text-zinc-500 text-[11px] font-mono shrink-0">
-                                  {formatBytes(file.size)}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveFile(idx)}
-                                className="text-zinc-500 hover:text-red-400 p-1 rounded-lg hover:bg-zinc-800 transition-all shrink-0 cursor-pointer"
-                                title="Remove file"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Optional Custom Archive Name */}
-                  <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                        <Tag className="w-3.5 h-3.5 text-[#E11D2E]" />
-                        <span>Custom Archive Name</span>
-                        <span className="text-zinc-500 font-normal text-[10px] bg-zinc-800 px-1.5 py-0.2 rounded">Optional</span>
-                      </label>
-                      <span className="text-[10px] text-zinc-500 font-mono">
-                        {documentName.trim()
-                          ? `${documentName.trim().replace(/\.zip$/i, '')}.zip`
-                          : selectedFiles.length === 1
-                          ? `${selectedFiles[0].name.replace(/\.[^/.]+$/, '')}.zip`
-                          : selectedFiles.length > 1
-                          ? `vault-${selectedFiles.length}files.zip`
-                          : 'Default: Original File Name'}
-                      </span>
                     </div>
-                    <input
-                      type="text"
-                      value={documentName}
-                      onChange={(e) => setDocumentName(e.target.value)}
-                      placeholder={
-                        selectedFiles.length === 1
-                          ? `e.g. ${selectedFiles[0].name.replace(/\.[^/.]+$/, '')} (leave blank to keep original)`
-                          : 'e.g. Project_Contract, Secret_Archive (leave blank for default)'
-                      }
-                      className="w-full rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none transition-all"
-                    />
+                  )}
+
+                  {uploadError && (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-300">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-[#E11D2E]" />
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadError('');
+                        setWizardStep(1);
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold cursor-pointer"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (entryMode === 'file' && selectedFiles.length === 0) {
+                          setUploadError('Please select at least one file before continuing.');
+                          return;
+                        }
+                        if (entryMode === 'text' && !textContent.trim()) {
+                          setUploadError('Please enter your confidential text before continuing.');
+                          return;
+                        }
+                        setUploadError('');
+                        setWizardStep(3);
+                      }}
+                      className="px-6 py-2.5 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-xs sm:text-sm font-bold transition-all shadow-lg shadow-red-950/30 cursor-pointer"
+                    >
+                      Continue
+                    </button>
                   </div>
                 </div>
-              ) : (
-                /* Secret Text Mode */
-                <div className="space-y-3 bg-zinc-950/60 p-4 rounded-xl border border-zinc-800">
-                  <div>
-                    <label className="text-xs font-semibold text-zinc-300 mb-1.5 block">
-                      Note Title / Filename (optional)
+              )}
+
+              {/* STEP 3 – Name Your Archive */}
+              {wizardStep === 3 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="p-4 sm:p-5 rounded-2xl bg-zinc-950/60 border border-zinc-800 space-y-3">
+                    <label className="text-sm font-bold text-white flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-[#E11D2E]" />
+                      <span>What would you like to name your archive?</span>
                     </label>
+
                     <input
                       type="text"
-                      value={textTitle}
-                      onChange={(e) => setTextTitle(e.target.value)}
-                      placeholder="e.g. API_Keys, Secret_Passwords, Confidential_Memo..."
-                      className="w-full rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none transition-all"
+                      value={entryMode === 'file' ? documentName : textTitle}
+                      onChange={(e) => (entryMode === 'file' ? setDocumentName(e.target.value) : setTextTitle(e.target.value))}
+                      placeholder={
+                        entryMode === 'file'
+                          ? selectedFiles.length === 1
+                            ? `Default: ${selectedFiles[0].name.replace(/\.[^/.]+$/, '')}.zip`
+                            : `Default: vault-${selectedFiles.length}files.zip`
+                          : 'Default: Secure_Note.txt'
+                      }
+                      className="w-full rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none transition-all"
                     />
+
+                    <div className="text-xs text-zinc-400 font-mono">
+                      Default name:{' '}
+                      <span className="text-zinc-200">
+                        {entryMode === 'file'
+                          ? selectedFiles.length === 1
+                            ? `${selectedFiles[0].name.replace(/\.[^/.]+$/, '')}.zip`
+                            : `vault-${selectedFiles.length}files.zip`
+                          : 'Secure_Note.txt'}
+                      </span>
+                    </div>
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-zinc-300">
-                        Confidential Content <span className="text-[#E11D2E]">*</span>
-                      </label>
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadError('');
+                        setWizardStep(2);
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold cursor-pointer"
+                    >
+                      Back
+                    </button>
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={async () => {
-                          try {
-                            const clip = await navigator.clipboard.readText();
-                            if (clip) {
-                              setTextContent((prev) => (prev ? prev + '\n' + clip : clip));
-                              setUploadError('');
-                            }
-                          } catch {}
+                        onClick={() => {
+                          if (entryMode === 'file') setDocumentName('');
+                          else setTextTitle('');
+                          setUploadError('');
+                          setWizardStep(4);
                         }}
-                        className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1 bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-800 transition-all cursor-pointer"
+                        className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold cursor-pointer"
                       >
-                        <Clipboard className="w-3 h-3 text-[#E11D2E]" /> Paste
+                        Skip
                       </button>
-                    </div>
-
-                    <textarea
-                      rows={5}
-                      value={textContent}
-                      onChange={(e) => {
-                        setTextContent(e.target.value);
-                        setUploadError('');
-                      }}
-                      placeholder="Type or paste confidential notes, passwords, private keys, or code snippets here..."
-                      className="w-full rounded-xl p-3 text-xs text-zinc-100 font-mono placeholder:text-zinc-600 focus:outline-none transition-all resize-y min-h-[120px]"
-                    />
-
-                    <div className="flex items-center justify-between mt-1 text-[11px] text-zinc-500">
-                      <span>{textContent.length} characters</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-zinc-600">Templates:</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTextTitle('API_Secrets');
-                            setTextContent('API_KEY=sk_live_9942a78fbc31...\nDATABASE_URL=mysql://user:pass@gateway:4000/secure_vault');
-                            setUploadError('');
-                          }}
-                          className="px-2 py-0.5 rounded bg-zinc-900 hover:text-white border border-zinc-800 text-[10px] transition-all cursor-pointer"
-                        >
-                          API Keys
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTextTitle('Confidential_Note');
-                            setTextContent('CONFIDENTIAL NOTE:\nThis message is encrypted with DocQevrilo.\nAccess code will expire per configuration.');
-                            setUploadError('');
-                          }}
-                          className="px-2 py-0.5 rounded bg-zinc-900 hover:text-white border border-zinc-800 text-[10px] transition-all cursor-pointer"
-                        >
-                          Note
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadError('');
+                          setWizardStep(4);
+                        }}
+                        className="px-6 py-2.5 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-xs sm:text-sm font-bold transition-all shadow-lg shadow-red-950/30 cursor-pointer"
+                      >
+                        Continue
+                      </button>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Storage Architecture & Expiry Rules Accordion */}
-              <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowSettingsAccordion((prev) => !prev)}
-                  className="w-full flex items-center justify-between p-3.5 text-left hover:bg-zinc-900/60 transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[#E11D2E] shrink-0 group-hover:border-[#E11D2E]/40 transition-colors">
-                      <SlidersHorizontal className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-xs font-semibold text-white block">
-                        Storage Policy & Access Rules
-                      </span>
-                      <span className="text-[11px] text-zinc-400 block truncate">
-                        {!storageMode
-                          ? 'Please select how your document should be stored or shared'
-                          : storageMode === 'temporary'
-                          ? `Temporary Auto-Purge (${expiryOption})`
-                          : storageMode === 'online'
-                          ? `Live Online P2P · ${expiryOption} window · ${maxDownloads === 'unlimited' ? 'Unlimited' : `${maxDownloads} recipients`} · Zero Cloud`
-                          : 'Long-Term Storage · Permanent retention'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                        !storageMode
-                          ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                      }`}
-                    >
-                      {!storageMode
-                        ? 'Select Required'
-                        : storageMode === 'temporary'
-                        ? 'Temp Auto-Purge'
-                        : storageMode === 'online'
-                        ? 'Live P2P'
-                        : 'Long-Term'}
-                    </span>
-                    {showSettingsAccordion ? (
-                      <ChevronUp className="w-4 h-4 text-zinc-400" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-zinc-400" />
-                    )}
-                  </div>
-                </button>
-
-                {showSettingsAccordion && (
-                  <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 space-y-4 animate-in fade-in duration-150">
+              {/* STEP 4 – Storage Policy & Access Rules */}
+              {wizardStep === 4 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 space-y-4">
                     <StorageModeSelector
                       storageMode={storageMode}
                       onChange={(mode) => {
+                        if (entryMode === 'text' && mode === 'online') {
+                          setUploadError('Live P2P is only available for files. Please choose Temporary Storage or Long-Term Storage for Secret Text.');
+                          return;
+                        }
                         setStorageMode(mode);
+                        setUploadError('');
                         if (mode === 'online') {
-                          if (!['5m', '10m', '15m', '30m', '1h'].includes(expiryOption)) {
+                          if (!['15m', '30m', '1h', '2h', '6h', '12h', '24h'].includes(expiryOption)) {
                             setExpiryOption('15m');
                           }
                           if (maxDownloads !== 'unlimited' && maxDownloads !== null && ![1, 2, 5, 10].includes(Number(maxDownloads))) {
                             setMaxDownloads(1);
                           }
                         } else if (mode === 'temporary') {
-                          setExpiryOption('1h');
+                          if (!expiryOption || expiryOption === 'never') setExpiryOption('1h');
                           setMaxDownloads('unlimited');
                           setDeleteAfterDownload(false);
                         } else if (mode === 'long_term') {
@@ -1706,175 +1902,420 @@ export default function VaultDashboard({ currentUser }) {
                       }}
                     />
 
+                    {/* Policy Explanation & Relevant Access Controls */}
                     {!storageMode ? (
                       <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200 flex items-center gap-2.5">
                         <SlidersHorizontal className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>
-                          Please select a storage option above (<strong>Temporary Storage</strong>, <strong>Online Sharing (Secure P2P)</strong>, or <strong>Long-Term Storage</strong>) to configure access rules.
-                        </span>
+                        <span>Select a storage policy above to configure recipient limits and access restrictions.</span>
                       </div>
                     ) : storageMode === 'online' ? (
-                      <OnlineSharingSettings
-                        expiry={expiryOption}
-                        setExpiry={setExpiryOption}
-                        maxDownloads={maxDownloads}
-                        setMaxDownloads={setMaxDownloads}
-                        deleteAfterDownload={deleteAfterDownload}
-                        setDeleteAfterDownload={setDeleteAfterDownload}
-                      />
+                      <div className="space-y-4 p-4 rounded-xl bg-[#0E0E10] border border-[#27272A]">
+                        <div className="space-y-1">
+                          <div className="text-xs font-bold text-white flex items-center gap-2">
+                            <Radio className="w-4 h-4 text-[#E11D2E]" />
+                            <span>Live P2P (Direct Browser-to-Browser)</span>
+                          </div>
+                          <p className="text-xs text-zinc-400 leading-relaxed">
+                            Your files stay in your browser and transfer directly to approved recipients with AES-256-GCM + Argon2id encryption. Nothing is uploaded to cloud storage.
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-zinc-300 mb-2">
+                            Maximum Recipients
+                          </label>
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                            {[
+                              { label: '1 Recipient', value: 1 },
+                              { label: '2 Recipients', value: 2 },
+                              { label: '5 Recipients', value: 5 },
+                              { label: '10 Recipients', value: 10 },
+                              { label: 'Unlimited', value: 'unlimited' },
+                            ].map((opt) => {
+                              const selected =
+                                opt.value === 'unlimited'
+                                  ? maxDownloads === 'unlimited' || maxDownloads === null
+                                  : Number(maxDownloads) === opt.value;
+                              return (
+                                <button
+                                  type="button"
+                                  key={String(opt.value)}
+                                  onClick={() => setMaxDownloads(opt.value)}
+                                  className={`py-2 px-2 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                                    selected
+                                      ? 'bg-red-950/70 border-[#E11D2E] text-white'
+                                      : 'bg-[#18181B] border-[#27272A] text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <label className="flex items-center justify-between p-3 rounded-xl bg-[#18181B] border border-[#27272A] cursor-pointer">
+                          <div>
+                            <div className="text-xs font-semibold text-white">One-Time Access (Single Completed Transfer)</div>
+                            <div className="text-[11px] text-zinc-400">
+                              Automatically locks new joins after the first recipient completes the download.
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={deleteAfterDownload}
+                            onChange={(e) => setDeleteAfterDownload(e.target.checked)}
+                            className="w-4 h-4 accent-[#E11D2E] cursor-pointer"
+                          />
+                        </label>
+                      </div>
                     ) : storageMode === 'long_term' ? (
-                      <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-amber-900/40 space-y-2">
-                        <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800">
-                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                            <HardDrive className="w-4 h-4 text-amber-400" /> Long-Term Storage
-                          </span>
-                          <span className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-800/40 px-2 py-0.5 rounded-full font-medium">
-                            Permanent Retention
-                          </span>
+                      <div className="p-4 rounded-xl bg-zinc-900/80 border border-amber-900/40 space-y-2">
+                        <div className="text-xs font-bold text-white flex items-center gap-2">
+                          <HardDrive className="w-4 h-4 text-amber-400" />
+                          <span>Long-Term Encrypted Cloud Archive</span>
                         </div>
                         <p className="text-xs text-zinc-300 leading-relaxed">
-                          Files remain securely preserved in Backblaze B2 until explicitly deleted by you.
+                          Your encrypted archive is stored in Backblaze B2 and protected with a SHA-256 hashed access code in TiDB Cloud until you delete it.
                         </p>
                       </div>
                     ) : (
-                      <TemporaryStorageSettings
-                        expiry={expiryOption}
-                        setExpiry={setExpiryOption}
-                        maxDownloads={maxDownloads}
-                        setMaxDownloads={setMaxDownloads}
-                        deleteAfterDownload={deleteAfterDownload}
-                        setDeleteAfterDownload={setDeleteAfterDownload}
-                        customMode={customMode}
-                        setCustomMode={setCustomMode}
-                        customDurationValue={customDurationValue}
-                        setCustomDurationValue={setCustomDurationValue}
-                        customDurationUnit={customDurationUnit}
-                        setCustomDurationUnit={setCustomDurationUnit}
-                        customDateTime={customDateTime}
-                        setCustomDateTime={setCustomDateTime}
-                        getDefaultDateTime={getDefaultDateTime}
-                        getMinDateTime={getMinDateTime}
-                      />
+                      <div className="space-y-4 p-4 rounded-xl bg-[#0E0E10] border border-[#27272A]">
+                        <div className="space-y-1">
+                          <div className="text-xs font-bold text-white flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-[#E11D2E]" />
+                            <span>Temporary Encrypted Cloud Archive</span>
+                          </div>
+                          <p className="text-xs text-zinc-400 leading-relaxed">
+                            Your encrypted archive is stored in Backblaze B2 and automatically deleted after the expiration timer or download limit is reached.
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-zinc-300 mb-2">
+                            Download Permissions (Max Downloads)
+                          </label>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                            {[
+                              { label: '1 Download', value: 1 },
+                              { label: '5 Downloads', value: 5 },
+                              { label: '10 Downloads', value: 10 },
+                              { label: 'Unlimited', value: 'unlimited' },
+                            ].map((opt) => {
+                              const selected =
+                                opt.value === 'unlimited'
+                                  ? maxDownloads === 'unlimited' || maxDownloads === null
+                                  : Number(maxDownloads) === opt.value;
+                              return (
+                                <button
+                                  type="button"
+                                  key={String(opt.value)}
+                                  onClick={() => setMaxDownloads(opt.value)}
+                                  className={`py-2 px-2 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                                    selected
+                                      ? 'bg-red-950/70 border-[#E11D2E] text-white'
+                                      : 'bg-[#18181B] border-[#27272A] text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <label className="flex items-center justify-between p-3 rounded-xl bg-[#18181B] border border-[#27272A] cursor-pointer">
+                          <div>
+                            <div className="text-xs font-semibold text-white">Burn After First Download</div>
+                            <div className="text-[11px] text-zinc-400">
+                              Immediately purges the cloud archive after 1 successful download.
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={deleteAfterDownload}
+                            onChange={(e) => setDeleteAfterDownload(e.target.checked)}
+                            className="w-4 h-4 accent-[#E11D2E] cursor-pointer"
+                          />
+                        </label>
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
 
-              {/* Progress bar */}
-              {isUploading && (
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs text-zinc-400 font-mono">
-                    <span>Uploading & Hashing with TiDB...</span>
-                    <span>{uploadProgress}%</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-[#E11D2E] to-red-500 transition-all duration-200"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Cloud Limit Warning when file > 250MB */}
-              {entryMode === 'file' &&
-                (storageMode === 'temporary' || storageMode === 'long_term') &&
-                selectedFiles.some((f) => f.size > 250 * 1024 * 1024) && (
-                  <div className="p-3.5 rounded-xl bg-amber-950/50 border border-amber-600/50 text-xs text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-150">
-                    <div className="flex items-start gap-2.5">
-                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                      <div className="space-y-0.5">
-                        <div className="font-bold text-amber-300">File Exceeds 250MB Cloud Storage Limit</div>
-                        <p className="text-[11px] text-amber-200/80 leading-relaxed">
-                          Permanent and Temporary B2 cloud storage cap files at 250MB. Select <strong>Online Sharing (Live P2P)</strong> in Storage Policy above for unlimited file size via direct P2P streaming.
-                        </p>
+                  {entryMode === 'file' &&
+                    (storageMode === 'temporary' || storageMode === 'long_term') &&
+                    selectedFiles.some((f) => f.size > 250 * 1024 * 1024) && (
+                      <div className="p-3.5 rounded-xl bg-amber-950/50 border border-amber-600/50 text-xs text-amber-200 flex items-center gap-2.5">
+                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>One or more selected files exceed the 250 MB cloud limit. Choose Live P2P instead.</span>
                       </div>
+                    )}
+
+                  {uploadError && (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-300">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-[#E11D2E]" />
+                      <span>{uploadError}</span>
                     </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2">
                     <button
                       type="button"
-                      onClick={() => setStorageMode('online')}
-                      className="shrink-0 px-3.5 py-1.5 rounded-lg bg-[#E11D2E] hover:bg-[#c91827] text-white text-xs font-bold transition-all cursor-pointer shadow-sm"
+                      onClick={() => {
+                        setUploadError('');
+                        setWizardStep(3);
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold cursor-pointer"
                     >
-                      Select Online Sharing
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!storageMode) {
+                          setUploadError('Please select a storage policy before continuing.');
+                          return;
+                        }
+                        if (
+                          entryMode === 'file' &&
+                          (storageMode === 'temporary' || storageMode === 'long_term') &&
+                          selectedFiles.some((f) => f.size > 250 * 1024 * 1024)
+                        ) {
+                          setUploadError('Selected file exceeds 250 MB cloud archive limit. Please choose Live P2P.');
+                          return;
+                        }
+                        setUploadError('');
+                        setWizardStep(5);
+                      }}
+                      className="px-6 py-2.5 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-xs sm:text-sm font-bold transition-all shadow-lg shadow-red-950/30 cursor-pointer"
+                    >
+                      Continue
                     </button>
                   </div>
-                )}
+                </div>
+              )}
 
-              {/* Online Sharing (Secure P2P) Banner when storageMode === 'online' */}
-              {storageMode === 'online' && entryMode === 'file' && (
-                <div className="p-3.5 rounded-xl bg-red-950/20 border border-[#E11D2E]/40 text-xs text-zinc-300 space-y-1.5 animate-in fade-in duration-150">
-                  <div className="flex items-center gap-2">
-                    <Radio className="w-4 h-4 text-[#E11D2E] animate-pulse shrink-0" />
-                    <span className="font-bold text-white">Secure P2P Live Sharing (E2EE)</span>
-                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-950/80 border border-[#E11D2E]/60 text-red-300">
-                      AES-256-GCM + Argon2id
-                    </span>
+              {/* STEP 5 – Set Time for All Downloads */}
+              {wizardStep === 5 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="p-4 sm:p-5 rounded-2xl bg-zinc-950/70 border border-zinc-800 space-y-4">
+                    <div className="space-y-1">
+                      <div className="text-sm font-bold text-white flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-[#E11D2E]" />
+                        <span>How long can recipients access and download this share?</span>
+                      </div>
+                      <p className="text-xs text-zinc-400">
+                        This timer starts when the session is created, applies equally to all recipients, and is strictly enforced by the backend.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { label: '15 minutes', value: '15m' },
+                        { label: '30 minutes', value: '30m' },
+                        { label: '1 hour', value: '1h' },
+                        { label: '2 hours', value: '2h' },
+                        { label: '6 hours', value: '6h' },
+                        { label: '12 hours', value: '12h' },
+                        { label: '24 hours', value: '24h' },
+                        ...(storageMode === 'long_term' ? [{ label: 'Never expires', value: 'never' }] : []),
+                        { label: 'Custom duration', value: 'custom' },
+                      ].map((opt) => (
+                        <button
+                          type="button"
+                          key={opt.value}
+                          onClick={() => {
+                            setExpiryOption(opt.value);
+                            if (opt.value === 'custom' && customDurationUnit !== 'm' && customDurationUnit !== 'h') {
+                              setCustomDurationValue(45);
+                              setCustomDurationUnit('m');
+                            }
+                            setUploadError('');
+                          }}
+                          className={`py-2.5 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                            expiryOption === opt.value
+                              ? 'bg-red-950/70 border-[#E11D2E] text-white shadow-sm'
+                              : 'bg-[#121215] border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {expiryOption === 'custom' && (
+                      <div className="p-3.5 rounded-xl bg-[#0E0E10] border border-zinc-800 space-y-2.5">
+                        <div className="text-xs font-semibold text-zinc-300">
+                          Custom Session Duration {storageMode === 'online' ? '(1 min – 24 hours)' : ''}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            max={storageMode === 'online' ? (customDurationUnit === 'h' ? 24 : 1440) : 365}
+                            value={customDurationValue}
+                            onChange={(e) => setCustomDurationValue(e.target.value)}
+                            className="w-28 rounded-lg px-3 py-2 text-xs text-white font-mono"
+                          />
+                          <select
+                            value={customDurationUnit}
+                            onChange={(e) => setCustomDurationUnit(e.target.value)}
+                            className="rounded-lg px-3 py-2 text-xs text-white bg-zinc-900 border border-zinc-700"
+                          >
+                            <option value="m">Minutes</option>
+                            <option value="h">Hours</option>
+                            {storageMode !== 'online' && <option value="d">Days</option>}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-3 rounded-xl bg-[#0E0E10] border border-zinc-800 flex items-center justify-between text-xs">
+                      <span className="text-zinc-400">Selected expiry policy (for all recipients):</span>
+                      <span className="font-mono font-bold text-white">
+                        {expiryOption === 'never'
+                          ? 'Permanent (No expiry)'
+                          : expiryOption === 'custom'
+                          ? `${customDurationValue || 1}${customDurationUnit}`
+                          : expiryOption}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    Files are encrypted locally in your browser and streamed directly over WebRTC DataChannels with Transfer ID, secret unlock code, QR code, and sender approval. Zero cloud storage, zero server secrets.
-                  </p>
+
+                  {uploadError && (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-300">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-[#E11D2E]" />
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadError('');
+                        setWizardStep(4);
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold cursor-pointer"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (expiryOption === 'custom' && (!customDurationValue || Number(customDurationValue) <= 0)) {
+                          setUploadError('Please enter a valid custom duration.');
+                          return;
+                        }
+                        setUploadError('');
+                        setWizardStep(6);
+                      }}
+                      className="px-6 py-2.5 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-xs sm:text-sm font-bold transition-all shadow-lg shadow-red-950/30 cursor-pointer"
+                    >
+                      Continue
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {/* Error Banner */}
-              {uploadError && (
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-300">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-[#E11D2E]" />
-                  <span>{uploadError}</span>
+              {/* STEP 6 – Generate Access Code */}
+              {wizardStep === 6 && !activeLiveSession && !uploadResult && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  {(isUploading || isStartingLiveShare) ? (
+                    <div className="p-5 rounded-2xl bg-zinc-950/70 border border-zinc-800 space-y-3">
+                      <div className="flex items-center gap-2.5 text-sm font-semibold text-white">
+                        <RefreshCw className="w-4 h-4 text-[#E11D2E] animate-spin" />
+                        <span>
+                          {isStartingLiveShare
+                            ? 'Deriving E2EE key & starting Live P2P session...'
+                            : 'Encrypting & generating access code...'}
+                        </span>
+                      </div>
+                      {isUploading && (
+                        <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-[#E11D2E] to-red-500 transition-all duration-200"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="p-5 rounded-2xl bg-gradient-to-br from-red-950/25 via-[#121216] to-[#0B0B0E] border border-[#E11D2E]/35 shadow-xl shadow-red-950/15 space-y-3.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="text-sm font-bold text-white flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-red-950/70 border border-[#E11D2E]/40 flex items-center justify-center text-[#E11D2E]">
+                              <Shield className="w-4 h-4" />
+                            </div>
+                            <span>Ready to Generate Sharing Credentials</span>
+                          </div>
+                          <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-300">
+                            {storageMode === 'online' ? 'E2EE AES-256-GCM + Argon2id' : 'Backblaze B2 + SHA-256'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                          <div className="p-2.5 rounded-xl bg-black/40 border border-zinc-800/80">
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500">Content</div>
+                            <div className="text-white font-semibold mt-0.5">
+                              {entryMode === 'file' ? `${selectedFiles.length} file(s)` : `${textContent.length} chars`}
+                            </div>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-black/40 border border-zinc-800/80">
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500">Sharing Policy</div>
+                            <div className="text-white font-semibold mt-0.5">
+                              {storageMode === 'online' ? 'Live P2P' : storageMode === 'long_term' ? 'Long-Term B2' : 'Temporary B2'}
+                            </div>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-black/40 border border-zinc-800/80">
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500">Expiry Window</div>
+                            <div className="text-white font-mono font-semibold mt-0.5">
+                              {expiryOption === 'custom' ? `${customDurationValue}${customDurationUnit}` : expiryOption}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {uploadError && (
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-300">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-[#E11D2E]" />
+                          <span>{uploadError}</span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadError('');
+                            setWizardStep(5);
+                          }}
+                          className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold cursor-pointer"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isUploading || isStartingLiveShare}
+                          className="px-6 py-3 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] disabled:bg-zinc-800 disabled:text-zinc-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-red-950/40 cursor-pointer"
+                        >
+                          {!currentUser ? (
+                            <>
+                              <Lock className="w-4 h-4" />
+                              <span>Sign In or Create Account to Share</span>
+                            </>
+                          ) : (
+                            <>
+                              <KeyRound className="w-4 h-4" />
+                              <span>Generate Access Code &amp; Start Sharing</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={Boolean(
-                  currentUser &&
-                    ((entryMode === 'file' ? selectedFiles.length === 0 : !textContent.trim()) ||
-                      !storageMode ||
-                      isUploading ||
-                      isStartingLiveShare ||
-                      (entryMode === 'file' &&
-                        (storageMode === 'temporary' || storageMode === 'long_term') &&
-                        selectedFiles.some((f) => f.size > 250 * 1024 * 1024)))
-                )}
-                className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.99] cursor-pointer ${
-                  !currentUser
-                    ? 'bg-gradient-to-r from-[#E11D2E] to-[#8A071A] hover:from-[#FF2E44] hover:to-[#E11D2E] border border-red-500/30'
-                    : 'bg-[#E11D2E] hover:bg-[#FF2E44] disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed shadow-red-950/40'
-                }`}
-              >
-                {!currentUser ? (
-                  <>
-                    <Lock className="w-4 h-4 text-white" />
-                    <span>Sign In or Create Account to Upload</span>
-                  </>
-                ) : !storageMode ? (
-                  <>
-                    <SlidersHorizontal className="w-4 h-4" />
-                    <span>Select Storage Policy & Access Rules Above</span>
-                  </>
-                ) : isStartingLiveShare ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Starting Live Session...</span>
-                  </>
-                ) : isUploading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Encrypting & Generating Code...</span>
-                  </>
-                ) : storageMode === 'online' && entryMode === 'file' ? (
-                  <>
-                    <Radio className="w-4 h-4 text-white animate-pulse" />
-                    <span>Generate Access Code & Start Live Share (No Limit)</span>
-                  </>
-                ) : (
-                  <>
-                    <KeyRound className="w-4 h-4" />
-                    <span>{entryMode === 'file' ? 'Generate Access Code & Upload' : 'Generate Access Code & Send Note'}</span>
-                  </>
-                )}
-              </button>
             </form>
 
             {/* Upload Success Card / Code Reveal */}
@@ -1892,40 +2333,51 @@ export default function VaultDashboard({ currentUser }) {
                   </span>
                 </div>
 
-                <div className="vault-code-display text-center mb-3 text-xl sm:text-2xl">
-                  {uploadResult.code}
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-center">
+                  <div className="md:col-span-2 space-y-3">
+                    <div className="vault-code-display text-center text-xl sm:text-2xl">
+                      {uploadResult.code}
+                    </div>
 
-                {/* Quick Action Buttons for Code */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(uploadResult.code)}
-                    className="py-2 px-3 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                  >
-                    {copySuccess ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copySuccess ? 'Code Copied!' : 'Copy Code'}</span>
-                  </button>
+                    {/* Quick Action Buttons for Code */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(uploadResult.code)}
+                        className="py-2 px-3 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                      >
+                        {copySuccess ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copySuccess ? 'Code Copied!' : 'Copy Code'}</span>
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={() => copyShareLink(uploadResult.code)}
-                    className="py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-zinc-700"
-                  >
-                    {copyLinkSuccess ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-[#E11D2E]" />}
-                    <span>{copyLinkSuccess ? 'Link Copied!' : 'Copy Direct Link'}</span>
-                  </button>
+                      <button
+                        type="button"
+                        onClick={() => copyShareLink(uploadResult.code)}
+                        className="py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-zinc-700"
+                      >
+                        {copyLinkSuccess ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-[#E11D2E]" />}
+                        <span>{copyLinkSuccess ? 'Link Copied!' : 'Copy Direct Link'}</span>
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAccessCodeInput(uploadResult.code);
-                      setActiveTab('access');
-                    }}
-                    className="py-2 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-zinc-800"
-                  >
-                    <span>Test Unlock &rarr;</span>
-                  </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAccessCodeInput(uploadResult.code);
+                          setActiveTab('access');
+                        }}
+                        className="py-2 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-zinc-800"
+                      >
+                        <span>Test Unlock &rarr;</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <BlurredQrCard
+                    value={`${window.location.origin}/vault?code=${encodeURIComponent(uploadResult.code)}`}
+                    size={112}
+                    title="Share QR Code"
+                    subtitle="Scan to unlock archive"
+                  />
                 </div>
 
                 {/* Upload metadata */}
@@ -1938,6 +2390,16 @@ export default function VaultDashboard({ currentUser }) {
                     <Clock className="w-3.5 h-3.5 text-amber-400" />
                     <span>Expires: <strong className="text-white">{uploadResult.doc.expires_at ? new Date(uploadResult.doc.expires_at).toLocaleDateString() : 'Permanent'}</strong></span>
                   </div>
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleResetWizard}
+                    className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-200 cursor-pointer"
+                  >
+                    Share Another Document
+                  </button>
                 </div>
               </div>
             )}
@@ -1989,7 +2451,7 @@ export default function VaultDashboard({ currentUser }) {
             <form onSubmit={handleAccessSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                  {isP2PTransferCode ? 'Transfer ID' : 'Access Code Credential'}
+                  {isLegacyP2PCode ? 'Legacy Transfer ID' : isP2PTransferCode ? 'Enter Secure ID' : 'Access Code or Secure ID'}
                 </label>
                 <div className="relative">
                   <input
@@ -1999,7 +2461,7 @@ export default function VaultDashboard({ currentUser }) {
                     onChange={(e) => {
                       const val = e.target.value.trim();
                       setAccessCodeInput(val);
-                      if (/^DQV-/i.test(val)) {
+                      if (/^DQV1?-/i.test(val)) {
                         setIsSecureP2PUnlock(true);
                       }
                       setAccessError('');
@@ -2007,8 +2469,8 @@ export default function VaultDashboard({ currentUser }) {
                     }}
                     placeholder={
                       isP2PTransferCode
-                        ? 'Enter Transfer ID... (e.g. DQV-A7X9-4421)'
-                        : 'Enter vault code, 6-char live code, or DQV-... Transfer ID'
+                        ? 'Enter Secure ID... (DQV1-...)'
+                        : 'Enter vault code, 6-char live code, or DQV1-... Secure ID'
                     }
                     className="w-full rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none transition-all pr-40"
                   />
@@ -2029,7 +2491,7 @@ export default function VaultDashboard({ currentUser }) {
                           if (text) {
                             const trimmed = text.trim();
                             setAccessCodeInput(trimmed);
-                            if (/^DQV-/i.test(trimmed)) setIsSecureP2PUnlock(true);
+                            if (/^DQV1?-/i.test(trimmed)) setIsSecureP2PUnlock(true);
                             if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
                           }
                         } catch {}
@@ -2042,12 +2504,12 @@ export default function VaultDashboard({ currentUser }) {
                 </div>
                 <p className="text-[11px] text-zinc-500 mt-1.5">
                   {isP2PTransferCode
-                    ? 'Format: DQV-XXXX-XXXX Transfer ID from the sender\'s Online Sharing (Secure P2P) session'
-                    : 'Format: 10-character vault code, 6-character live code, or DQV-... Secure P2P Transfer ID'}
+                    ? 'Paste or scan the single Secure ID (DQV1-...) — no separate unlock code needed.'
+                    : 'Format: 10-character vault code, 6-character live code, or DQV1-... Secure ID'}
                 </p>
               </div>
 
-              {isP2PTransferCode && (
+              {isLegacyP2PCode && (
                 <div>
                   <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
                     Secret Unlock Code
@@ -2114,7 +2576,7 @@ export default function VaultDashboard({ currentUser }) {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={!accessCodeInput || (isP2PTransferCode && !p2pUnlockSecret.trim()) || isVerifying}
+                disabled={!accessCodeInput || (isLegacyP2PCode && !p2pUnlockSecret.trim()) || isVerifying}
                 className="w-full py-3 px-4 rounded-xl bg-[#E11D2E] hover:bg-[#FF2E44] disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-950/30 cursor-pointer"
               >
                 {isVerifying ? (

@@ -14,8 +14,9 @@ import { getApiBaseUrl } from '../config/api';
 import { authService } from './authService';
 import {
   KDF_PARAMS,
-  generateTransferId,
-  generateUnlockSecret,
+  generateSecureId,
+  parseSecureId,
+  isSecureIdFormat,
   generateSalt,
   deriveAesKeyFromSecret,
   encryptJsonPayload,
@@ -90,12 +91,19 @@ export class P2PSenderSession {
     }
 
     this.files = Array.from(files);
-    this.transferId = generateTransferId();
-    this.unlockSecret = generateUnlockSecret();
+    const { secureId, transferId, unlockSecret } = await generateSecureId();
+    this.secureId = secureId;
+    this.transferId = transferId;
+    this.unlockSecret = unlockSecret;
     this.salt = generateSalt();
     this.aborted = false;
 
-    this._emitState({ status: 'DERIVING_KEY', transferId: this.transferId, unlockSecret: this.unlockSecret });
+    this._emitState({
+      status: 'DERIVING_KEY',
+      secureId: this.secureId,
+      transferId: this.transferId,
+      unlockSecret: this.unlockSecret,
+    });
 
     // Derive AES-256-GCM key locally via Argon2id (never leaves browser)
     this.aesKey = await deriveAesKeyFromSecret(this.unlockSecret, this.salt, KDF_PARAMS);
@@ -149,6 +157,7 @@ export class P2PSenderSession {
             this.iceServers = res.iceServers || this.iceServers;
             this._emitState({
               status: res.status || 'WAITING_FOR_RECIPIENT',
+              secureId: this.secureId,
               transferId: this.transferId,
               unlockSecret: this.unlockSecret,
               expiresAt: res.expiresAt,
@@ -168,6 +177,7 @@ export class P2PSenderSession {
     });
 
     return {
+      secureId: this.secureId,
       transferId: this.transferId,
       unlockSecret: this.unlockSecret,
       expiresAt: this.expiresAt,
@@ -650,15 +660,25 @@ export class P2PReceiverSession {
     this.callbacks.onStateChange?.(patch);
   }
 
-  async joinSession({ transferId, unlockSecret }) {
-    const cleanId = (transferId || '').trim();
-    const cleanSecret = (unlockSecret || '').trim();
+  async joinSession({ secureId, transferId, unlockSecret }) {
+    let cleanId = (transferId || '').trim();
+    let cleanSecret = (unlockSecret || '').trim();
+
+    const candidateSecureId = (secureId || '').trim() || (isSecureIdFormat(cleanId) ? cleanId : '');
+    if (candidateSecureId || /^DQV1-/i.test(cleanId)) {
+      const parsed = await parseSecureId(candidateSecureId || cleanId);
+      if (!parsed.ok) {
+        throw new Error(parsed.error || 'Invalid Secure ID.');
+      }
+      cleanId = parsed.transferId;
+      cleanSecret = parsed.unlockSecret;
+    }
 
     if (!cleanId || cleanId.length < 12) {
-      throw new Error('Please enter a valid Transfer ID.');
+      throw new Error('Please enter a valid Secure ID or Transfer ID.');
     }
     if (!cleanSecret || cleanSecret.length < 8) {
-      throw new Error('Please enter the secret unlock code.');
+      throw new Error('Please enter a valid Secure ID or secret unlock code.');
     }
 
     this.transferId = cleanId;

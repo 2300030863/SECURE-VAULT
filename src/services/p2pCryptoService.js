@@ -40,6 +40,82 @@ export function fromBase64(b64) {
   return bytes;
 }
 
+export function toBase64Url(uint8) {
+  return toBase64(uint8).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+const SECURE_ID_RE = /^DQV1-([A-HJ-NP-Z2-9]{12})-([A-Za-z0-9_-]{27})-([A-Za-z0-9_-]{4})$/;
+
+export function isSecureIdFormat(raw) {
+  return typeof raw === 'string' && SECURE_ID_RE.test(raw.trim());
+}
+
+async function computeSecureIdTag(roomRaw, secretB64u) {
+  const data = new TextEncoder().encode(`DQV1:${roomRaw}:${secretB64u}`);
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+  return toBase64Url(digest.subarray(0, 3));
+}
+
+/**
+ * Generates a single combined Secure ID containing:
+ * - Public 60-bit room identifier (reconstructed into DQV-XXXX-XXXX-XXXX for signaling)
+ * - 160-bit CSPRNG secret material (never sent to backend)
+ * - 24-bit SHA-256 integrity tag (detects typos / tampering locally)
+ *
+ * Format: DQV1-<12charRoom>-<27charSecret>-<4charTag>
+ */
+export async function generateSecureId() {
+  const roomBytes = new Uint8Array(12);
+  crypto.getRandomValues(roomBytes);
+  let roomRaw = '';
+  for (let i = 0; i < roomBytes.length; i++) {
+    roomRaw += BASE32_ALPHABET[roomBytes[i] % BASE32_ALPHABET.length];
+  }
+
+  const secretBytes = new Uint8Array(20); // 160 bits
+  crypto.getRandomValues(secretBytes);
+  const secretB64u = toBase64Url(secretBytes);
+  const tag = await computeSecureIdTag(roomRaw, secretB64u);
+
+  const transferId = `DQV-${roomRaw.slice(0, 4)}-${roomRaw.slice(4, 8)}-${roomRaw.slice(8, 12)}`;
+  const secureId = `DQV1-${roomRaw}-${secretB64u}-${tag}`;
+  return { secureId, transferId, unlockSecret: secretB64u };
+}
+
+/**
+ * Validates and decodes a Secure ID locally into { transferId, unlockSecret }.
+ * Rejects malformed or tampered Secure IDs before any network request is made.
+ */
+export async function parseSecureId(rawSecureId) {
+  if (typeof rawSecureId !== 'string') {
+    return { ok: false, error: 'Please enter a valid Secure ID.' };
+  }
+  const trimmed = rawSecureId.trim();
+  const match = trimmed.match(SECURE_ID_RE);
+  if (!match) {
+    return { ok: false, error: 'Invalid Secure ID format. Expected DQV1-... from sender.' };
+  }
+
+  const [, roomRaw, secretB64u, providedTag] = match;
+  const expectedTag = await computeSecureIdTag(roomRaw, secretB64u);
+
+  let diff = expectedTag.length ^ providedTag.length;
+  for (let i = 0; i < expectedTag.length; i++) {
+    diff |= expectedTag.charCodeAt(i) ^ providedTag.charCodeAt(i);
+  }
+  if (diff !== 0) {
+    return { ok: false, error: 'Secure ID check failed. Verify you copied the complete code without typos.' };
+  }
+
+  const transferId = `DQV-${roomRaw.slice(0, 4)}-${roomRaw.slice(4, 8)}-${roomRaw.slice(8, 12)}`;
+  return {
+    ok: true,
+    secureId: trimmed,
+    transferId,
+    unlockSecret: secretB64u,
+  };
+}
+
 /**
  * Generates a cryptographically random Transfer ID (separate from unlock secret).
  * Format: DQV-XXXX-XXXX-XXXX (16 random chars, URL-safe, >80 bits ID space).
