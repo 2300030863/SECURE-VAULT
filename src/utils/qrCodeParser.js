@@ -7,7 +7,7 @@
 
 const SECURE_ID_RE = /^DQV1-[A-HJ-NP-Z2-9]{12}-[A-Za-z0-9_-]{27}-[A-Za-z0-9_-]{4}$/;
 const TRANSFER_ID_RE = /^DQV-[A-Z0-9]{4}(?:-[A-Z0-9]{4}){2,3}$/i;
-const VAULT_OR_LIVE_CODE_RE = /^[A-Za-z0-9]{4,32}$/;
+const VAULT_OR_LIVE_CODE_RE = /^[A-Za-z0-9@$!_-]{4,32}$/;
 const UNLOCK_SECRET_RE = /^[A-Za-z0-9_-]{8,128}$/;
 
 const APPROVED_PATH_PREFIXES = ['/vault', '/p2p-share', '/secure-p2p', '/online-share'];

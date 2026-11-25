@@ -502,12 +502,12 @@ export default function VaultDashboard({ currentUser }) {
       setAuthPromptOpen(true);
       return;
     }
-    if (entryMode === 'file' && selectedFiles.length === 0) {
+    if ((entryMode === 'file' || entryMode === 'both') && selectedFiles.length === 0) {
       setUploadError('Please select at least one file to upload.');
       setWizardStep(2);
       return;
     }
-    if (entryMode === 'text' && !textContent.trim()) {
+    if ((entryMode === 'text' || entryMode === 'both') && !textContent.trim()) {
       setUploadError('Please enter text content to secure.');
       setWizardStep(2);
       return;
@@ -519,8 +519,18 @@ export default function VaultDashboard({ currentUser }) {
     }
     setWizardStep(6);
 
+    const noteFile =
+      entryMode === 'both' && textContent.trim()
+        ? new window.File(
+            [textContent.trim()],
+            `${(textTitle.trim() || 'Secret_Note').replace(/\.txt$/i, '')}.txt`,
+            { type: 'text/plain' }
+          )
+        : null;
+    const filesForShare = noteFile ? [...selectedFiles, noteFile] : selectedFiles;
+
     // SECURE P2P ONLINE SHARING (E2EE AES-256-GCM + Argon2id + Socket.IO + WebRTC):
-    if (storageMode === 'online' && entryMode === 'file') {
+    if (storageMode === 'online' && (entryMode === 'file' || entryMode === 'both')) {
       setIsStartingLiveShare(true);
       setUploadError('');
       setLiveShareProgress(null);
@@ -544,11 +554,11 @@ export default function VaultDashboard({ currentUser }) {
           : [1, 2, 5, 10].includes(Number(maxDownloads))
           ? Number(maxDownloads)
           : 1;
-      const totalSize = selectedFiles.reduce((acc, f) => acc + f.size, 0);
+      const totalSize = filesForShare.reduce((acc, f) => acc + f.size, 0);
       const displayName =
-        selectedFiles.length > 1
-          ? `${selectedFiles.length} files (${selectedFiles[0].name}...)`
-          : selectedFiles[0].name;
+        filesForShare.length > 1
+          ? `${filesForShare.length} files (${filesForShare[0].name}...)`
+          : filesForShare[0].name;
 
       try {
         secureP2PRef.current?.stopSharing();
@@ -558,7 +568,7 @@ export default function VaultDashboard({ currentUser }) {
               ...(prev || {
                 fileName: displayName,
                 fileSize: totalSize,
-                fileCount: selectedFiles.length,
+                fileCount: filesForShare.length,
                 recipients: [],
                 recipientCount: 0,
               }),
@@ -577,12 +587,12 @@ export default function VaultDashboard({ currentUser }) {
         });
         secureP2PRef.current = session;
         await session.startSession({
-          files: selectedFiles,
+          files: filesForShare,
           durationSeconds,
           maxRecipients: parsedMaxRecipients,
           oneTimeAccess: Boolean(deleteAfterDownload),
         });
-        setLiveShareStatusMessage('Secure P2P session active. Share Transfer ID and Secret Unlock Code separately.');
+        setLiveShareStatusMessage('Secure P2P session active. Share Secure ID or QR code.');
       } catch (err) {
         setActiveLiveSession(null);
         setUploadError(err.message || 'Could not start Secure P2P sharing session.');
@@ -593,7 +603,7 @@ export default function VaultDashboard({ currentUser }) {
     }
 
     // File size validation for cloud uploads
-    if (entryMode === 'file' && selectedFiles.some((f) => f.size > 250 * 1024 * 1024)) {
+    if ((entryMode === 'file' || entryMode === 'both') && filesForShare.some((f) => f.size > 250 * 1024 * 1024)) {
       setUploadError('One or more files exceed the 250MB cloud upload limit. Select "Online Sharing (Live P2P)" in Storage Policy for unlimited file size streaming.');
       return;
     }
@@ -629,10 +639,10 @@ export default function VaultDashboard({ currentUser }) {
 
     try {
       let res;
-      if (entryMode === 'file') {
+      if (entryMode === 'file' || entryMode === 'both') {
         const isUnlimitedDl = maxDownloads === 'unlimited' || !maxDownloads || maxDownloads === '';
         const formData = new FormData();
-        selectedFiles.forEach((file) => {
+        filesForShare.forEach((file) => {
           formData.append('files', file);
         });
         if (documentName.trim()) {
@@ -1460,10 +1470,10 @@ export default function VaultDashboard({ currentUser }) {
 
             {/* Upload Form (Steps 1–7) */}
             <form onSubmit={handleUpload} className="space-y-5">
-              {/* STEP 1 – Choose What to Share */}
+              {/* STEP 1 – Choose Sharing Content */}
               {wizardStep === 1 && (
                 <div className="space-y-4 animate-in fade-in duration-150">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                     <button
                       type="button"
                       onClick={() => {
@@ -1535,6 +1545,42 @@ export default function VaultDashboard({ currentUser }) {
                         </p>
                       </div>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEntryMode('both');
+                        setHasSelectedEntryMode(true);
+                        setUploadError('');
+                      }}
+                      className={`group p-5 sm:p-6 rounded-2xl text-left border transition-all duration-200 cursor-pointer space-y-3.5 hover:-translate-y-0.5 ${
+                        hasSelectedEntryMode && entryMode === 'both'
+                          ? 'bg-gradient-to-br from-red-950/35 via-[#151519] to-[#0E0E11] border-[#E11D2E] ring-1 ring-[#E11D2E]/40 shadow-xl shadow-red-950/25'
+                          : 'bg-[#101014]/90 border-zinc-800/90 hover:border-zinc-700 hover:bg-[#141419]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="w-12 h-12 rounded-xl bg-zinc-900/90 border border-zinc-800 group-hover:border-[#E11D2E]/40 flex items-center justify-center text-[#E11D2E] shadow-inner transition-colors">
+                          <Layers className="w-5 h-5" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
+                            Combined
+                          </span>
+                          {hasSelectedEntryMode && entryMode === 'both' && (
+                            <span className="w-6 h-6 rounded-full bg-[#E11D2E] text-white flex items-center justify-center shadow-md shadow-red-950/40">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm sm:text-base font-bold text-white">Files + Secret Text</div>
+                        <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                          Bundle attached files together with a confidential text note in one encrypted share.
+                        </p>
+                      </div>
+                    </button>
                   </div>
 
                   {uploadError && (
@@ -1564,7 +1610,7 @@ export default function VaultDashboard({ currentUser }) {
               {/* STEP 2 – Select Files or Enter Secret Text */}
               {wizardStep === 2 && (
                 <div className="space-y-4 animate-in fade-in duration-150">
-                  {entryMode === 'file' ? (
+                  {entryMode !== 'text' && (
                     <div className="space-y-3">
                       <div
                         onDragOver={(e) => e.preventDefault()}
@@ -1691,7 +1737,8 @@ export default function VaultDashboard({ currentUser }) {
                         )}
                       </div>
                     </div>
-                  ) : (
+                  )}
+                  {entryMode !== 'file' && (
                     <div className="space-y-3 bg-zinc-950/60 p-4 rounded-xl border border-zinc-800">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-semibold text-zinc-300">
@@ -1777,11 +1824,11 @@ export default function VaultDashboard({ currentUser }) {
                     <button
                       type="button"
                       onClick={() => {
-                        if (entryMode === 'file' && selectedFiles.length === 0) {
+                        if ((entryMode === 'file' || entryMode === 'both') && selectedFiles.length === 0) {
                           setUploadError('Please select at least one file before continuing.');
                           return;
                         }
-                        if (entryMode === 'text' && !textContent.trim()) {
+                        if ((entryMode === 'text' || entryMode === 'both') && !textContent.trim()) {
                           setUploadError('Please enter your confidential text before continuing.');
                           return;
                         }
@@ -1807,13 +1854,13 @@ export default function VaultDashboard({ currentUser }) {
 
                     <input
                       type="text"
-                      value={entryMode === 'file' ? documentName : textTitle}
-                      onChange={(e) => (entryMode === 'file' ? setDocumentName(e.target.value) : setTextTitle(e.target.value))}
+                      value={entryMode !== 'text' ? documentName : textTitle}
+                      onChange={(e) => (entryMode !== 'text' ? setDocumentName(e.target.value) : setTextTitle(e.target.value))}
                       placeholder={
-                        entryMode === 'file'
-                          ? selectedFiles.length === 1
+                        entryMode !== 'text'
+                          ? selectedFiles.length === 1 && entryMode === 'file'
                             ? `Default: ${selectedFiles[0].name.replace(/\.[^/.]+$/, '')}.zip`
-                            : `Default: vault-${selectedFiles.length}files.zip`
+                            : `Default: vault-${selectedFiles.length + (entryMode === 'both' ? 1 : 0)}files.zip`
                           : 'Default: Secure_Note.txt'
                       }
                       className="w-full rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none transition-all"
@@ -1822,10 +1869,10 @@ export default function VaultDashboard({ currentUser }) {
                     <div className="text-xs text-zinc-400 font-mono">
                       Default name:{' '}
                       <span className="text-zinc-200">
-                        {entryMode === 'file'
-                          ? selectedFiles.length === 1
+                        {entryMode !== 'text'
+                          ? selectedFiles.length === 1 && entryMode === 'file'
                             ? `${selectedFiles[0].name.replace(/\.[^/.]+$/, '')}.zip`
-                            : `vault-${selectedFiles.length}files.zip`
+                            : `vault-${selectedFiles.length + (entryMode === 'both' ? 1 : 0)}files.zip`
                           : 'Secure_Note.txt'}
                       </span>
                     </div>
@@ -2258,7 +2305,11 @@ export default function VaultDashboard({ currentUser }) {
                           <div className="p-2.5 rounded-xl bg-black/40 border border-zinc-800/80">
                             <div className="text-[10px] uppercase tracking-wider text-zinc-500">Content</div>
                             <div className="text-white font-semibold mt-0.5">
-                              {entryMode === 'file' ? `${selectedFiles.length} file(s)` : `${textContent.length} chars`}
+                              {entryMode === 'both'
+                                ? `${selectedFiles.length} file(s) + ${textContent.length} chars`
+                                : entryMode === 'file'
+                                ? `${selectedFiles.length} file(s)`
+                                : `${textContent.length} chars`}
                             </div>
                           </div>
                           <div className="p-2.5 rounded-xl bg-black/40 border border-zinc-800/80">
@@ -2453,54 +2504,53 @@ export default function VaultDashboard({ currentUser }) {
                 <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
                   {isLegacyP2PCode ? 'Legacy Transfer ID' : isP2PTransferCode ? 'Enter Secure ID' : 'Access Code or Secure ID'}
                 </label>
-                <div className="relative">
-                  <input
-                    ref={accessCodeInputRef}
-                    type="text"
-                    value={accessCodeInput}
-                    onChange={(e) => {
-                      const val = e.target.value.trim();
-                      setAccessCodeInput(val);
-                      if (/^DQV1?-/i.test(val)) {
-                        setIsSecureP2PUnlock(true);
-                      }
-                      setAccessError('');
-                      if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
-                    }}
-                    placeholder={
-                      isP2PTransferCode
-                        ? 'Enter Secure ID... (DQV1-...)'
-                        : 'Enter vault code, 6-char live code, or DQV1-... Secure ID'
+                <input
+                  ref={accessCodeInputRef}
+                  type="text"
+                  value={accessCodeInput}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    setAccessCodeInput(val);
+                    if (/^DQV1?-/i.test(val)) {
+                      setIsSecureP2PUnlock(true);
                     }
-                    className="w-full rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none transition-all pr-40"
-                  />
-                  <div className="absolute right-2 top-2 flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowQrScanner(true)}
-                      className="px-2.5 py-1 text-xs font-semibold text-red-200 hover:text-white bg-red-950/60 hover:bg-[#E11D2E] border border-[#E11D2E]/50 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
-                    >
-                      <QrCode className="w-3.5 h-3.5" />
-                      <span>Scan QR Code</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const text = await navigator.clipboard.readText();
-                          if (text) {
-                            const trimmed = text.trim();
-                            setAccessCodeInput(trimmed);
-                            if (/^DQV1?-/i.test(trimmed)) setIsSecureP2PUnlock(true);
-                            if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
-                          }
-                        } catch {}
-                      }}
-                      className="px-2.5 py-1 text-xs font-mono text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 rounded-lg transition-all cursor-pointer"
-                    >
-                      Paste
-                    </button>
-                  </div>
+                    setAccessError('');
+                    if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
+                  }}
+                  placeholder={
+                    isP2PTransferCode
+                      ? 'Enter Secure ID... (DQV1-...)'
+                      : 'Enter vault code, 6-char live code, or DQV1-... Secure ID'
+                  }
+                  className="w-full rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-zinc-600 focus:outline-none transition-all"
+                />
+                <div className="grid grid-cols-2 gap-2 mt-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowQrScanner(true)}
+                    className="py-2.5 px-3 text-xs font-semibold text-red-200 hover:text-white bg-red-950/60 hover:bg-[#E11D2E] border border-[#E11D2E]/50 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>Scan QR Code</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        if (text) {
+                          const trimmed = text.trim();
+                          setAccessCodeInput(trimmed);
+                          if (/^DQV1?-/i.test(trimmed)) setIsSecureP2PUnlock(true);
+                          if (unlockedLiveShareCode) setUnlockedLiveShareCode(null);
+                        }
+                      } catch {}
+                    }}
+                    className="py-2.5 px-3 text-xs font-semibold text-zinc-200 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Clipboard className="w-4 h-4 text-[#E11D2E]" />
+                    <span>Paste Code</span>
+                  </button>
                 </div>
                 <p className="text-[11px] text-zinc-500 mt-1.5">
                   {isP2PTransferCode
