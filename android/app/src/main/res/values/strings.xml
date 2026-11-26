@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DocQevrilo</string>
+    <string name="title_activity_main">DocQevrilo</string>
+    <string name="package_name">com.docqevrilo.app</string>
+    <string name="custom_url_scheme">com.docqevrilo.app</string>
+</resources>

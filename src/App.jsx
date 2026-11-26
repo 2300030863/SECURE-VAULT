@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 // Import CSS Design System
 import './styles/global.css';
@@ -32,6 +32,30 @@ import TermsOfService from './pages/TermsOfService';
 // Import Auth Service & API Configuration
 import { authService } from './services/authService';
 import { API_BASE_URL } from './config/api';
+import { initNativeShell } from './services/nativeService';
+
+function NativeBridge({ onNetworkChange }) {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let cleanup = () => {};
+    initNativeShell({
+      onNetworkChange,
+      onDeepLink: (rawUrl) => {
+        try {
+          const u = new URL(rawUrl);
+          const target = `${u.pathname || '/vault'}${u.search || ''}${u.hash || ''}`;
+          navigate(target);
+        } catch (_) {}
+      },
+    }).then((fn) => {
+      if (typeof fn === 'function') cleanup = fn;
+    });
+    return () => cleanup();
+  }, [navigate, onNetworkChange]);
+
+  return null;
+}
 
 function AppFooter({ currentUser }) {
   const location = useLocation();
@@ -48,6 +72,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
   const [platformAnnouncement, setPlatformAnnouncement] = useState(null);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   useEffect(() => {
     async function checkAuth() {
@@ -85,6 +110,24 @@ export default function App() {
 
   return (
     <Router>
+      <NativeBridge onNetworkChange={setIsOnline} />
+      {!isOnline && (
+        <div
+          role="status"
+          style={{
+            width: '100%',
+            padding: '8px 16px',
+            background: '#7f1d1d',
+            color: '#fecaca',
+            fontSize: '12px',
+            fontWeight: 600,
+            textAlign: 'center',
+            zIndex: 60,
+          }}
+        >
+          Offline Mode — Reconnect to Wi-Fi or mobile data to sync vault or start P2P transfers.
+        </div>
+      )}
       {/* Dynamic Obsidian & Crimson Ambient Atmosphere */}
       <div className="app-atmosphere" aria-hidden="true">
         <div className="ambient-orb ambient-orb-top" />
