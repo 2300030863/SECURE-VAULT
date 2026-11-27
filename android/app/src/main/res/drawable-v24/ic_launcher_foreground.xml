@@ -1,0 +1,29 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer crimson shield within 66dp adaptive icon safe zone -->
+    <path
+        android:fillColor="#E11D2E"
+        android:pathData="M54,23L31,32.5V50.5C31,65.8 40.8,79.9 54,84.5C67.2,79.9 77,65.8 77,50.5V32.5L54,23Z" />
+    <!-- Inner dark shield cutout -->
+    <path
+        android:fillColor="#141418"
+        android:pathData="M54,28.5L36.5,35.8V50.2C36.5,62.3 44,73.5 54,77.6C64,73.5 71.5,62.3 71.5,50.2V35.8L54,28.5Z" />
+    <!-- White vault lock shackle -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M48,50V45.5C48,42.2 50.7,39.5 54,39.5C57.3,39.5 60,42.2 60,45.5V50"
+        android:strokeWidth="3.2"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round" />
+    <!-- White vault lock body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M45,50H63C64.1,50 65,50.9 65,52V62.5C65,63.6 64.1,64.5 63,64.5H45C43.9,64.5 43,63.6 43,62.5V52C43,50.9 43.9,50 45,50Z" />
+    <!-- Crimson keyhole -->
+    <path
+        android:fillColor="#E11D2E"
+        android:pathData="M54,54.8C55.2,54.8 56.2,55.8 56.2,57C56.2,57.9 55.6,58.7 54.8,59V61.3H53.2V59C52.4,58.7 51.8,57.9 51.8,57C51.8,55.8 52.8,54.8 54,54.8Z" />
+</vector>

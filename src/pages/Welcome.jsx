@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import {
   Shield,
   KeyRound,
@@ -37,6 +38,7 @@ import {
   FileCode,
   Tag,
   RefreshCw,
+  Smartphone,
 } from 'lucide-react';
 
 export default function Welcome({ currentUser }) {
@@ -232,7 +234,36 @@ export default function Welcome({ currentUser }) {
               <KeyRound size={16} />
               <span>Open Vault</span>
             </Link>
+
+            {!Capacitor.isNativePlatform() && (
+              <a
+                href="/downloads/DocQevrilo.apk"
+                download="DocQevrilo.apk"
+                className="sv-btn-secondary border border-[#E11D2E]/50 bg-[#E11D2E]/10 hover:bg-[#E11D2E]/20 text-white"
+              >
+                <Smartphone size={16} className="text-[#E11D2E]" />
+                <span>Download Android App</span>
+                <Download size={15} className="text-[#E11D2E]" />
+              </a>
+            )}
           </div>
+
+          {!Capacitor.isNativePlatform() && (
+            <div className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3.5 py-2 text-xs text-zinc-300">
+              <Smartphone size={14} className="text-[#E11D2E] shrink-0" />
+              <span>
+                Prefer mobile? You can{' '}
+                <a
+                  href="/downloads/DocQevrilo.apk"
+                  download="DocQevrilo.apk"
+                  className="font-semibold text-white underline decoration-[#E11D2E] underline-offset-2 hover:text-[#E11D2E]"
+                >
+                  download the DocQevrilo Android app (.apk)
+                </a>{' '}
+                directly from here.
+              </span>
+            </div>
+          )}
 
           {/* Cryptographic Trust Indicator */}
           <div className="sv-hero-trust sv-trust-v2">

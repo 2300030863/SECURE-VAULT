@@ -30,6 +30,7 @@ import GlassCard from '../components/GlassCard';
 import BlurredQrCard from '../components/sharing/BlurredQrCard';
 import UnlockQrScannerModal from '../components/sharing/UnlockQrScannerModal';
 import { P2PSenderSession, P2PReceiverSession } from '../services/p2pSocketWebRtcService';
+import { getPublicWebOrigin } from '../config/api';
 import { extractSecureIdFromHash } from '../utils/qrCodeParser';
 import { isSecureIdFormat } from '../services/p2pCryptoService';
 
@@ -807,7 +808,7 @@ export default function SecureP2PShare() {
 
                 {/* QR Code Card (Blurred until Show QR clicked) */}
                 <BlurredQrCard
-                  value={`${window.location.origin}/p2p-share#id=${encodeURIComponent(senderState.secureId || senderState.transferId)}`}
+                  value={`${getPublicWebOrigin()}/p2p-share#id=${encodeURIComponent(senderState.secureId || senderState.transferId)}`}
                   size={112}
                   title="Secure QR Code"
                   subtitle="Scan to connect & unlock"

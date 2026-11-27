@@ -15,7 +15,25 @@
  *    - On remote server/domain -> ${window.location.origin}/api
  */
 
+import { Capacitor } from '@capacitor/core';
+
+export const getPublicWebOrigin = () => {
+  if (Capacitor.isNativePlatform()) {
+    return (import.meta.env.VITE_PUBLIC_WEB_URL || 'https://secure-vault-delta-virid.vercel.app').replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin.replace(/\/+$/, '');
+  }
+  return 'https://secure-vault-delta-virid.vercel.app';
+};
+
 export const getApiBaseUrl = () => {
+  // Native Android/iOS application via Capacitor
+  if (Capacitor.isNativePlatform()) {
+    const configuredApi = import.meta.env.VITE_API_BASE_URL || 'https://secure-vault-backend-1.onrender.com/api';
+    return configuredApi.replace(/\/+$/, '');
+  }
+
   if (typeof window !== 'undefined') {
     // 1. Runtime URL parameter or localStorage override
     try {

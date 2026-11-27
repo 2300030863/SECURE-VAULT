@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authService } from '../services/authService';
-import { apiUrl } from '../config/api';
+import { apiUrl, getPublicWebOrigin } from '../config/api';
+import { nativeShare } from '../services/nativeService';
 import {
   Shield,
   UploadCloud,
@@ -720,9 +721,16 @@ export default function VaultDashboard({ currentUser }) {
     setTimeout(() => setCopySuccess(false), 2500);
   };
 
-  const copyShareLink = (code) => {
-    const fullUrl = `${window.location.origin}/vault?code=${encodeURIComponent(code)}`;
-    navigator.clipboard.writeText(fullUrl);
+  const copyShareLink = async (code) => {
+    const fullUrl = `${getPublicWebOrigin()}/vault?code=${encodeURIComponent(code)}`;
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+    } catch (_) {}
+    await nativeShare({
+      title: 'DocQevrilo Secure Share',
+      text: `Unlock shared document on DocQevrilo (Code: ${code})`,
+      url: fullUrl,
+    }).catch(() => {});
     setCopyLinkSuccess(true);
     setTimeout(() => setCopyLinkSuccess(false), 2500);
   };
@@ -1341,7 +1349,7 @@ export default function VaultDashboard({ currentUser }) {
                     </div>
 
                     <BlurredQrCard
-                      value={`${window.location.origin}/vault#id=${encodeURIComponent(activeLiveSession.secureId || activeLiveSession.transferId)}`}
+                      value={`${getPublicWebOrigin()}/vault#id=${encodeURIComponent(activeLiveSession.secureId || activeLiveSession.transferId)}`}
                       size={108}
                       title="Secure QR Code"
                       subtitle="Scan to connect & unlock"
@@ -2429,7 +2437,7 @@ export default function VaultDashboard({ currentUser }) {
                   </div>
 
                   <BlurredQrCard
-                    value={`${window.location.origin}/vault?code=${encodeURIComponent(uploadResult.code)}`}
+                    value={`${getPublicWebOrigin()}/vault?code=${encodeURIComponent(uploadResult.code)}`}
                     size={112}
                     title="Share QR Code"
                     subtitle="Scan to unlock archive"

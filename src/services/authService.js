@@ -7,6 +7,7 @@
  */
 
 import { API_BASE_URL } from '../config/api';
+import { nativeTokenStore } from './nativeService';
 
 // Memory cache for active token
 let authToken = sessionStorage.getItem('sv_token') || localStorage.getItem('sv_token') || null;
@@ -142,9 +143,11 @@ export const authService = {
     if (rememberMe) {
       localStorage.setItem('sv_token', data.token);
       localStorage.setItem('sv_user_email_hint', email);
+      await nativeTokenStore.save(data.token);
     } else {
       sessionStorage.setItem('sv_token', data.token);
       localStorage.removeItem('sv_token');
+      await nativeTokenStore.clear();
     }
 
     if (data.user?.role === 'admin') {
@@ -178,6 +181,7 @@ export const authService = {
       localStorage.removeItem('sv_token');
       sessionStorage.removeItem('sv_admin_token');
       localStorage.removeItem('sv_admin_token');
+      await nativeTokenStore.clear();
     }
     return { success: true };
   },
@@ -186,7 +190,14 @@ export const authService = {
    * Get the current authenticated user from TiDB
    */
   async getCurrentUser() {
-    const token = this.getToken();
+    let token = this.getToken();
+    if (!token) {
+      token = await nativeTokenStore.load();
+      if (token) {
+        authToken = token;
+        sessionStorage.setItem('sv_token', token);
+      }
+    }
     if (!token) return null;
 
     try {
