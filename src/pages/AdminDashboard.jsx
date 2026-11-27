@@ -79,9 +79,10 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
   // Live Ping Diagnostics States
   const [pingResult, setPingResult] = useState(null);
   const [isPinging, setIsPinging] = useState(false);
+  const [securityOverview, setSecurityOverview] = useState(null);
 
   // UI Control States
-  const [tab, setTab] = useState("overview"); // "overview" | "users" | "documents" | "logs" | "health" | "email"
+  const [tab, setTab] = useState("overview"); // "overview" | "users" | "documents" | "logs" | "health" | "security" | "email"
   const [loading, setLoading] = useState(true);
   const [purging, setPurging] = useState(false);
   const [banner, setBanner] = useState(null); // { type: 'success' | 'error', message: string }
@@ -155,12 +156,13 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [summary, userData, docData, logData, healthData, meData, emailCfg, activeAnnounce] = await Promise.all([
+      const [summary, userData, docData, logData, healthData, secData, meData, emailCfg, activeAnnounce] = await Promise.all([
         adminFetch("/overview").catch(() => null),
         adminFetch("/users?limit=100").catch(() => ({ users: [] })),
         adminFetch("/documents?limit=100").catch(() => ({ documents: [] })),
         adminFetch("/audit-logs?limit=50").catch(() => ({ logs: [] })),
         adminFetch("/system-status").catch(() => null),
+        adminFetch("/security-overview").catch(() => null),
         adminFetch("/me").catch(() => null),
         adminFetch("/email/status").catch(() => ({ configured: false })),
         adminFetch("/announcement").catch(() => ({ active: false, message: "", type: "info" })),
@@ -171,6 +173,7 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
       if (docData?.documents) setDocuments(docData.documents);
       if (logData?.logs) setLogs(logData.logs);
       if (healthData) setSystemStatus(healthData);
+      if (secData) setSecurityOverview(secData);
       if (emailCfg) setEmailStatus(emailCfg);
       if (activeAnnounce) {
         const ann = activeAnnounce.announcement || activeAnnounce;
@@ -687,6 +690,13 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
           </button>
 
           <button
+            className={`admin-nav-item ${tab === "security" ? "selected active" : ""}`}
+            onClick={() => setTab("security")}
+          >
+            <Shield size={17} /> <span>7-Layer Security</span>
+          </button>
+
+          <button
             className={`admin-nav-item ${tab === "email" ? "selected active" : ""}`}
             onClick={() => setTab("email")}
           >
@@ -717,6 +727,7 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
               {tab === "documents" && "Document Vault Monitoring"}
               {tab === "logs" && "Security Audit Trail"}
               {tab === "health" && "System Infrastructure & Diagnostics"}
+              {tab === "security" && "7-Layer OSI Security Center"}
               {tab === "email" && "Email Broadcast & User Communication"}
             </h1>
           </div>
@@ -1721,6 +1732,130 @@ export default function AdminDashboard({ currentUser, onAdminLoaded }) {
                 </div>
               )}
             </div>
+          </section>
+        )}
+
+        {/* ---------------- TAB 5B: 7-LAYER OSI SECURITY ---------------- */}
+        {tab === "security" && (
+          <section className="admin-panel space-y-5">
+            <div className="admin-panel-head">
+              <div>
+                <h2>7-Layer OSI Security &amp; Live Telemetry</h2>
+                <p>Real-time status from DeepShield WAF, AES-256-GCM encryption, session revocation, and infrastructure checks.</p>
+              </div>
+              <button
+                type="button"
+                onClick={loadAll}
+                className="admin-action-btn"
+              >
+                <RefreshCw size={14} /> Refresh Telemetry
+              </button>
+            </div>
+
+            {!securityOverview ? (
+              <div className="p-4 rounded-xl bg-zinc-900/70 border border-zinc-800 text-sm text-zinc-400">
+                Loading live security telemetry from backend...
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">WAF Inspected / Blocked</div>
+                    <div className="text-lg font-bold text-white mt-1">
+                      {securityOverview.firewall?.totalRequestsInspected ?? 0} /{" "}
+                      <span className="text-[#E11D2E]">{securityOverview.firewall?.totalAttacksBlocked ?? 0}</span>
+                    </div>
+                    <div className="text-[11px] text-zinc-500 mt-1">
+                      Active IP Bans: {securityOverview.firewall?.activeBansCount ?? 0}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">At-Rest &amp; P2P Encryption</div>
+                    <div className="text-sm font-bold text-emerald-400 mt-1">
+                      {securityOverview.encryption?.atRestAlgorithm} ({securityOverview.encryption?.envelopeFormat})
+                    </div>
+                    <div className="text-[11px] text-zinc-500 mt-1">
+                      P2P: {securityOverview.encryption?.p2pE2eeAlgorithm}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">Session Lifecycle</div>
+                    <div className="text-sm font-bold text-white mt-1">
+                      Active Refresh: {securityOverview.sessions?.activeRefreshTokensCount ?? 0}
+                    </div>
+                    <div className="text-[11px] text-zinc-500 mt-1">
+                      Revoked JWTs: {securityOverview.sessions?.revokedJtisCount ?? 0}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">Infrastructure &amp; Findings</div>
+                    <div className="text-sm font-bold text-white mt-1">
+                      TiDB: {securityOverview.infrastructure?.tidbConnected ? "Connected" : "Fallback"} · B2:{" "}
+                      {securityOverview.infrastructure?.b2Connected ? "Connected" : "Offline"}
+                    </div>
+                    <div className="text-[11px] text-amber-400 mt-1">
+                      Open Findings: {securityOverview.findings?.length ?? 0}
+                    </div>
+                  </div>
+                </div>
+
+                {securityOverview.findings?.length > 0 && (
+                  <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-800/40 space-y-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                      Active Configuration &amp; Risk Findings
+                    </h3>
+                    {securityOverview.findings.map((f, idx) => (
+                      <div key={idx} className="text-xs text-zinc-300 flex flex-wrap gap-2">
+                        <span className="font-bold text-amber-400">[{f.severity} · {f.layer}]</span>
+                        <span className="font-semibold text-white">{f.title}:</span>
+                        <span className="text-zinc-400">{f.detail}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(securityOverview.osiLayers || []).map((layer) => (
+                    <div key={layer.layer} className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">
+                          Layer {layer.layer}: {layer.name}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-emerald-400 font-semibold">
+                          {layer.status} · {layer.scope}
+                        </span>
+                      </div>
+                      <ul className="space-y-1 text-[11px] text-zinc-400 list-disc pl-4">
+                        {(layer.controls || []).map((c, i) => (
+                          <li key={i}>{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                    Recent Security &amp; Session Events
+                  </h3>
+                  {[...(securityOverview.firewall?.recentSecurityEvents || []), ...(securityOverview.sessions?.recentSessionEvents || [])].length === 0 ? (
+                    <p className="text-xs text-zinc-500">No security anomalies or blocked attacks recorded in this session.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto text-xs">
+                      {[...(securityOverview.firewall?.recentSecurityEvents || []), ...(securityOverview.sessions?.recentSessionEvents || [])]
+                        .slice(0, 15)
+                        .map((ev, i) => (
+                          <div key={ev.id || i} className="p-2 rounded bg-zinc-900/70 border border-zinc-800 flex flex-wrap justify-between gap-2">
+                            <span className="font-mono text-[#E11D2E] font-semibold">{ev.type || ev.reason || "SECURITY_EVENT"}</span>
+                            <span className="text-zinc-400">{ev.ip || ev.email || ev.fileName || ""}</span>
+                            <span className="text-zinc-500">{ev.timestamp || ""}</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </section>
         )}
 

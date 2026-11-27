@@ -29,16 +29,22 @@ import {
   FileImage,
   FileType,
   File,
+  QrCode,
+  Link2,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { authService } from '../../services/authService';
 import { apiUrl } from '../../config/api';
 import VaultCodeSecurityModal from './VaultCodeSecurityModal';
 import AiDocumentModal from '../ai/AiDocumentModal';
+import BlurredQrCard from './BlurredQrCard';
 
 export default function MySharedDocuments({ currentUser, onNavigateAuth, onDocumentsChange }) {
   const [documents, setDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedCode, setCopiedCode] = useState(null);
+  const [copiedLinkId, setCopiedLinkId] = useState(null);
+  const [qrDocId, setQrDocId] = useState(null);
   const [deletingDoc, setDeletingDoc] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -151,6 +157,20 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth, onDocum
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2500);
+  };
+
+  const getDirectShareLink = (code) => {
+    const origin = Capacitor.isNativePlatform()
+      ? 'https://secure-vault-delta-virid.vercel.app'
+      : window.location.origin;
+    return `${origin}/vault?code=${encodeURIComponent(code)}`;
+  };
+
+  const copyDirectLink = (docId, code) => {
+    const url = getDirectShareLink(code);
+    navigator.clipboard.writeText(url);
+    setCopiedLinkId(docId);
+    setTimeout(() => setCopiedLinkId(null), 2500);
   };
 
   const fetchDocuments = async () => {
@@ -672,62 +692,120 @@ export default function MySharedDocuments({ currentUser, onNavigateAuth, onDocum
                   </div>
 
                   {revealedCodes[doc.id] ? (
-                    <div className="flex items-center justify-between bg-[#0b0b0e] px-2.5 py-1.5 rounded-lg border border-emerald-600/30 gap-2">
-                      <code className="font-mono text-xs text-white font-bold tracking-wider truncate">
-                        {revealedCodes[doc.id]}
-                      </code>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => copyCode(revealedCodes[doc.id])}
-                          className="px-2 py-1 rounded bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer shadow-sm"
-                          title="Copy access code"
-                        >
-                          {copiedCode === revealedCodes[doc.id] ? (
-                            <>
-                              <Check className="w-3 h-3" />
-                              <span>Copied</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRevealedCodes((prev) => {
-                              const next = { ...prev };
-                              delete next[doc.id];
-                              return next;
-                            });
-                          }}
-                          className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all cursor-pointer"
-                          title="Hide access code"
-                        >
-                          <EyeOff className="w-3.5 h-3.5" />
-                        </button>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between bg-[#0b0b0e] px-2.5 py-1.5 rounded-lg border border-emerald-600/30 gap-2">
+                        <code className="font-mono text-xs text-white font-bold tracking-wider truncate">
+                          {revealedCodes[doc.id]}
+                        </code>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => copyCode(revealedCodes[doc.id])}
+                            className="px-2 py-1 rounded bg-[#E11D2E] hover:bg-[#FF2E44] text-white text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                            title="Copy access code"
+                          >
+                            {copiedCode === revealedCodes[doc.id] ? (
+                              <>
+                                <Check className="w-3 h-3" />
+                                <span>Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => copyDirectLink(doc.id, revealedCodes[doc.id])}
+                            className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer"
+                            title="Copy direct access link"
+                          >
+                            {copiedLinkId === doc.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-400" />
+                                <span>Link</span>
+                              </>
+                            ) : (
+                              <>
+                                <Link2 className="w-3 h-3 text-[#E11D2E]" />
+                                <span>Link</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setQrDocId((prev) => (prev === doc.id ? null : doc.id))}
+                            className={`px-2 py-1 rounded border text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer ${
+                              qrDocId === doc.id
+                                ? 'bg-[#E11D2E]/20 border-[#E11D2E]/60 text-white'
+                                : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-200 hover:text-white'
+                            }`}
+                            title="Show QR Code for this document"
+                          >
+                            <QrCode className="w-3 h-3 text-[#E11D2E]" />
+                            <span>QR</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRevealedCodes((prev) => {
+                                const next = { ...prev };
+                                delete next[doc.id];
+                                return next;
+                              });
+                              if (qrDocId === doc.id) setQrDocId(null);
+                            }}
+                            className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all cursor-pointer"
+                            title="Hide access code"
+                          >
+                            <EyeOff className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
+
+                      {qrDocId === doc.id && (
+                        <BlurredQrCard
+                          value={getDirectShareLink(revealedCodes[doc.id])}
+                          size={112}
+                          title={doc.storage_mode === 'long_term' ? 'Permanent Document QR' : 'Temporary Document QR'}
+                          subtitle="Scan to unlock directly"
+                        />
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center justify-between bg-[#0b0b0e] px-2.5 py-1.5 rounded-lg border border-zinc-800 gap-2">
                       <span className="font-mono text-zinc-500 text-xs tracking-widest select-none">
                         ••••••••••
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSecurityModalDoc(doc);
-                          setSecurityModalAction('reveal');
-                        }}
-                        className="px-2.5 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-[#E11D2E]/50 text-zinc-200 hover:text-white text-[11px] font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                        title="Enter password + PIN or OTP to reveal code"
-                      >
-                        <Lock className="w-3 h-3 text-[#E11D2E]" />
-                        <span>Show Code</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSecurityModalDoc(doc);
+                            setSecurityModalAction('reveal');
+                          }}
+                          className="px-2.5 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-[#E11D2E]/50 text-zinc-200 hover:text-white text-[11px] font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                          title="Enter password + PIN or OTP to reveal code"
+                        >
+                          <Lock className="w-3 h-3 text-[#E11D2E]" />
+                          <span>Show Code</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSecurityModalDoc(doc);
+                            setSecurityModalAction('reveal');
+                            setQrDocId(doc.id);
+                          }}
+                          className="px-2 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-[#E11D2E]/50 text-zinc-200 hover:text-white text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                          title="Verify 2FA to view QR Code"
+                        >
+                          <QrCode className="w-3 h-3 text-[#E11D2E]" />
+                          <span>QR</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

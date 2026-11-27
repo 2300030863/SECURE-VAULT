@@ -287,10 +287,15 @@ export default function VaultDashboard({ currentUser }) {
     if (codeFromUrl && codeFromUrl.trim()) {
       const trimmed = codeFromUrl.trim();
       setAccessCodeInput(trimmed);
-      if (/^DQV1?-/i.test(trimmed)) {
-        setIsSecureP2PUnlock(true);
-      }
       setActiveTab('access');
+      if (/^DQV1-/i.test(trimmed)) {
+        setIsSecureP2PUnlock(true);
+        joinSecureP2PByCode(trimmed);
+      } else if (/^DQV-/i.test(trimmed)) {
+        setIsSecureP2PUnlock(true);
+      } else {
+        unlockVaultAccessCode(trimmed);
+      }
     }
   }, [searchParams]);
 

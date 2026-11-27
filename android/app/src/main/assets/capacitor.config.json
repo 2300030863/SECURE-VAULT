@@ -1,0 +1,18 @@
+{
+	"appId": "com.docqevrilo.app",
+	"appName": "DocQevrilo",
+	"webDir": "dist",
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 1500,
+			"launchAutoHide": true,
+			"backgroundColor": "#0B0B0D",
+			"androidSplashResourceName": "splash",
+			"showSpinner": false
+		},
+		"StatusBar": {
+			"style": "DARK",
+			"backgroundColor": "#0B0B0D"
+		}
+	}
+}

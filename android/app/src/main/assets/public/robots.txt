@@ -1,0 +1,8 @@
+# DocQevrilo Search Engine Crawler Directives
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://secure-vault-delta-virid.vercel.app/sitemap.xml
+

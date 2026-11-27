@@ -22,9 +22,11 @@ import {
   CheckCircle2,
   Activity,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { getApiBaseUrl } from '../../config/api';
 import { authService } from '../../services/authService';
 import { WebRtcShareSession, formatFileSize } from '../../services/webRtcShareService';
+import BlurredQrCard from './BlurredQrCard';
 import JSZip from 'jszip';
 
 function formatCountdown(totalSeconds = 0) {
@@ -458,13 +460,37 @@ export default function OnlineLiveShare({
     }
   };
 
+  const getDirectShareUrl = (code) => {
+    if (!code) return '';
+    const origin = Capacitor.isNativePlatform()
+      ? 'https://secure-vault-delta-virid.vercel.app'
+      : window.location.origin;
+    return `${origin}/online-share?code=${encodeURIComponent(code)}`;
+  };
+
   const copyShareLink = () => {
     if (activeSession?.accessCode) {
-      const shareUrl = `${window.location.origin}/vault?tab=online-share&code=${activeSession.accessCode}`;
+      const shareUrl = getDirectShareUrl(activeSession.accessCode);
       navigator.clipboard.writeText(shareUrl);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
     }
+  };
+
+  const shareDirectLink = async () => {
+    if (!activeSession?.accessCode) return;
+    const shareUrl = getDirectShareUrl(activeSession.accessCode);
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: 'DocQevrilo Direct Document Access',
+          text: `Access shared document directly (Code: ${activeSession.accessCode})`,
+          url: shareUrl,
+        });
+        return;
+      } catch (_) {}
+    }
+    copyShareLink();
   };
 
   // ---------------------------------------------------------------------------
@@ -932,6 +958,33 @@ export default function OnlineLiveShare({
                     {copiedLink ? <Check className="w-3.5 h-3.5 text-green-400" /> : <ExternalLink className="w-3.5 h-3.5" />}
                     <span>{copiedLink ? 'Copied Link!' : 'Copy Direct Link'}</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={shareDirectLink}
+                    className="px-4 py-2 rounded-lg bg-[#E11D2E] hover:bg-[#FF2E44] text-xs font-semibold text-white flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Share Direct Link</span>
+                  </button>
+                </div>
+
+                {/* Direct Document Access URL + Blurred QR */}
+                <div className="pt-3 border-t border-zinc-800/80 flex flex-col sm:flex-row items-center justify-center gap-4 text-left">
+                  <div className="w-full max-w-sm space-y-1.5">
+                    <span className="text-[11px] font-semibold text-zinc-400 block">
+                      Direct Document Access Link
+                    </span>
+                    <div className="px-3 py-2 rounded-lg bg-[#18181B] border border-zinc-800 text-[11px] font-mono text-zinc-200 break-all select-all">
+                      {getDirectShareUrl(activeSession.accessCode)}
+                    </div>
+                  </div>
+                  <BlurredQrCard
+                    value={getDirectShareUrl(activeSession.accessCode)}
+                    size={104}
+                    title="Direct Link QR"
+                    subtitle="Scan to open document directly"
+                  />
                 </div>
               </div>
 

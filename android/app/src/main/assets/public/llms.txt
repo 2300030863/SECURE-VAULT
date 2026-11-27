@@ -1,0 +1,28 @@
+# DocQevrilo
+
+> DocQevrilo is a zero-knowledge document sharing platform and multimodal AI study assistant.
+
+DocQevrilo allows users to securely store, organize, preview, and share documents using single-use cryptographic access codes without relying on messaging apps. It features multimodal AI capabilities powered by Groq Vision, Whisper transcription, and tabular analysis for all major file formats.
+
+## Platform Pages
+
+- [Homepage](https://secure-vault-delta-virid.vercel.app/): Overview of DocQevrilo features, architecture, and security.
+- [Vault Workspace](https://secure-vault-delta-virid.vercel.app/vault): Encrypted upload console, code generation, and AI study assistant.
+- [Register](https://secure-vault-delta-virid.vercel.app/register): Create a secure zero-knowledge user account.
+- [Sign In](https://secure-vault-delta-virid.vercel.app/login): Access personal document vault.
+
+## Capabilities & AI Features
+
+- [Groq Vision OCR](https://secure-vault-delta-virid.vercel.app/vault): Transcribes OCR text, handwriting, whiteboard notes, and diagrams from images (.png, .jpg, .jpeg, .webp, .gif, .bmp, .svg).
+- [Groq Whisper Audio Transcription](https://secure-vault-delta-virid.vercel.app/vault): Converts speech into high-precision transcripts with timestamped markers from audio recordings (.mp3, .wav, .m4a, .ogg, .flac, .aac, .webm).
+- [Deep Archive Extraction](https://secure-vault-delta-virid.vercel.app/vault): Recursively unpacks nested ZIP, RAR, 7Z, TAR, and GZ archives into a unified study index.
+- [Tabular Data Analysis](https://secure-vault-delta-virid.vercel.app/vault): Indexes spreadsheets (.xlsx, .xls, .csv, .tsv) row-by-row for instant calculations and financial Q&A.
+- [Full-Text Document Indexing](https://secure-vault-delta-virid.vercel.app/vault): Slide-by-slide and page-by-page extraction for PDF, DOCX, DOC, PPTX, TXT, and RTF files.
+- [Code & Syntax Comprehension](https://secure-vault-delta-virid.vercel.app/vault): Structural comprehension, bug spotting, and technical queries across JS, TS, Python, Java, C++, SQL, HTML, and CSS.
+
+## Security & Architecture
+
+- [Zero-Knowledge Encryption](https://secure-vault-delta-virid.vercel.app/#features): Client-side AES-GCM-256 encryption ensures raw document bytes are never exposed to intermediate servers.
+- [Ephemeral Access Codes](https://secure-vault-delta-virid.vercel.app/#features): Ephemeral 6-digit access tokens with customizable expiry windows and download burn limits.
+- [Agentic Resource Discovery](https://secure-vault-delta-virid.vercel.app/.well-known/ard.json): Machine-readable Agentic Resource Discovery (ARD) manifest for AI agents.
+- [Full Documentation](https://secure-vault-delta-virid.vercel.app/llms-full.txt): Comprehensive system reference and developer specifications for AI agents.
