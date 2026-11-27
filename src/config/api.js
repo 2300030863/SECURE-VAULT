@@ -27,11 +27,17 @@ export const getPublicWebOrigin = () => {
   return 'https://secure-vault-delta-virid.vercel.app';
 };
 
+const normalizeApiBase = (rawUrl) => {
+  const clean = String(rawUrl || '').trim().replace(/\/+$/, '');
+  if (!clean) return '';
+  return clean.endsWith('/api') ? clean : `${clean}/api`;
+};
+
 export const getApiBaseUrl = () => {
   // Native Android/iOS application via Capacitor
   if (Capacitor.isNativePlatform()) {
     const configuredApi = import.meta.env.VITE_API_BASE_URL || 'https://secure-vault-backend-1.onrender.com/api';
-    return configuredApi.replace(/\/+$/, '');
+    return normalizeApiBase(configuredApi);
   }
 
   if (typeof window !== 'undefined') {
@@ -43,7 +49,7 @@ export const getApiBaseUrl = () => {
         if (queryParam === 'reset') {
           localStorage.removeItem('sv_custom_api_url');
         } else {
-          const clean = queryParam.trim().replace(/\/+$/, '');
+          const clean = normalizeApiBase(queryParam);
           localStorage.setItem('sv_custom_api_url', clean);
           return clean;
         }
@@ -51,12 +57,12 @@ export const getApiBaseUrl = () => {
 
       const storedUrl = localStorage.getItem('sv_custom_api_url');
       if (storedUrl && storedUrl.trim()) {
-        return storedUrl.trim().replace(/\/+$/, '');
+        return normalizeApiBase(storedUrl);
       }
 
       // Injected runtime config (Docker/HTML script)
       if (window.__API_URL__) {
-        return window.__API_URL__.replace(/\/+$/, '');
+        return normalizeApiBase(window.__API_URL__);
       }
     } catch (_) {
       // Ignore storage access errors in restricted iframe/browser modes
@@ -66,7 +72,7 @@ export const getApiBaseUrl = () => {
   // 2. Build-time environment variable
   const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
   if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
-    const cleanEnv = envUrl.trim().replace(/\/+$/, '');
+    const cleanEnv = normalizeApiBase(envUrl);
 
     // Safety check: If deployed on a live domain but env mistakenly points to localhost,
     // don't try to connect to the client's local computer; use the live domain instead.

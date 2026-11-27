@@ -5,6 +5,7 @@ import GlassCard from '../components/GlassCard';
 import PasswordInput from '../components/PasswordInput';
 import FormMessage from '../components/FormMessage';
 import { authService } from '../services/authService';
+import { API_BASE_URL } from '../config/api';
 
 export default function Login({ onLoginSuccess }) {
   const navigate = useNavigate();
@@ -94,7 +95,7 @@ export default function Login({ onLoginSuccess }) {
     } catch (err) {
       let errMsg = err.message || 'Unable to sign in. Please check your credentials.';
       if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
-        errMsg = 'Cannot reach the backend server on http://localhost:5000. Please ensure the backend is running (`npm run dev`).';
+        errMsg = `Cannot reach the backend server (${API_BASE_URL}). Please try again.`;
       }
       setStatusMessage({
         type: 'error',
